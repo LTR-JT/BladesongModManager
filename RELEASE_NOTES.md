@@ -1,7 +1,5 @@
-Unpublished standalone manager 0.1.1 candidate
+Unpublished standalone manager 0.1.2 candidate
 
-Requires UE4SS only. Removed framework startup/API, shared renderer and PCL menu-asset dependencies. The panel uses a stock game frame and manager-local services/tabs. Creative menu base remains in BladesongModFramework.
+Fixed the Mods button disappearing when UE4SS returns a fresh Lua proxy for the same native widget. Legacy combined-manager filtering now compares native addresses, preserves the standalone button and restores its visibility. Added a regression reproducing the disappearing button with distinct wrappers sharing a native address.
 
-Framework installation is resolved only for selected mods that declare it. Added portable standalone metadata, metadata-first capability planning, exact-executable checks for raw integrations, and unused-framework removal with dependency protection. Bootstrap packages and CI no longer include or build the framework. Legacy combined Mods buttons are safely collapsed.
-
-Automated tests pass; stock-game-widget behavior still needs live verification. No release publication is authorized.
+The manager still runs on UE4SS alone. Creative base UI and SDK compatibility remain in the optional framework. No release publication is authorized; live verification of this fix is pending.

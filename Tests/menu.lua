@@ -27,7 +27,7 @@ local function btn(name)
  function b:GetStyle()return style end
  function b:IsA(c)return c==template end
  function b:SetVisibility(value)self.visibility=value end
- function b:SetStyle()end;function b:SetCaption(c)self.name=c end
+ function b:SetStyle()end;function b:SetCaption(c)self.name=c;self.Caption=c end
  function b:SetMinDimensions(w,h)self.MinWidth=w;self.MinHeight=h end
  function b:SetToolTipText()end
  return b
@@ -87,3 +87,18 @@ M.click_hook_installed=false;assert(not M.TryBindClickHook()and bind_count==0)
 available=true;assert(M.TryBindClickHook());assert(M.TryBindClickHook()and bind_count==1)
 StaticFindObject,RegisterHook=find_before,hook_before
 print('PASS: standalone manager waits for the native click function and binds once without a framework readiness signal')
+
+-- UE4SS returns fresh Lua proxy objects for a single native widget.
+local child_at=parent.GetChildAt
+function parent:GetChildAt(index)
+ local native=child_at(self,index)
+ return setmetatable({},{__index=function(_,key)
+  local value=native[key]
+  if type(value)=='function'then return function(_,...)return value(native,...)end end
+  return value
+ end})
+end
+M.entry:SetVisibility(0);M.Monitor()
+assert(M.entry.visibility==0,'Legacy filter hid its own native widget through a fresh proxy')
+assert(legacy.visibility==1,'Legacy Mods entry was not suppressed')
+print('PASS: fresh UE4SS wrappers cannot cause the standalone Mods button to hide itself')

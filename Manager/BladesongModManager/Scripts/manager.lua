@@ -403,7 +403,9 @@ function M.Monitor()
   local options=M.main.OptionsButton;local parent=valid(options)and options:GetParent()
   if valid(parent)then for i=0,parent:GetChildrenCount()-1 do
    local child=parent:GetChildAt(i);local known,is_button=pcall(function()return child:IsA(options:GetClass())end)
-   if child~=M.entry and known and is_button then
+   local own=valid(child)and valid(M.entry)and child:GetAddress()==M.entry:GetAddress()
+   if own then child:SetVisibility(0)
+   elseif known and is_button then
     local ok,caption=pcall(function()return plain(child.Caption)end)
     if ok and type(caption)=='string'and caption:lower()=='mods'then child:SetVisibility(1)end
    end

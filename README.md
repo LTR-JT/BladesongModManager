@@ -1,6 +1,6 @@
 # Bladesong Mod Manager
 
-Standalone in-game mod management for Bladesong. Requires working UE4SS, **not BladesongModFramework**. Source candidate 0.1.1.
+Standalone in-game mod management for Bladesong. Requires working UE4SS, **not BladesongModFramework**. Source candidate 0.1.2.
 
 The manager owns the main-menu Mods entry, catalogue, dependency plans, install/update, uninstall and ownership tools. Its services, JSON parser, menu container and tab renderer are self-contained. It uses stock game widgets and never loads a framework module or PCL asset to open its menu.
 

@@ -1,6 +1,6 @@
 -- Private manager services. No framework module is imported or required.
 local root=assert(...);local J=assert(loadfile(root..'json.lua'))()
-local F={VERSION='0.1.1',errors={},_json=J,cache={}}
+local F={VERSION='0.1.2',errors={},_json=J,cache={}}
 local function read(path)
  local file=io.open(path,'rb');if not file then return end;local raw=file:read(1048577);file:close();if #raw>1048576 then return end
  local ok,value=pcall(J.decode,raw);if ok and type(value)=='table'then return value end
