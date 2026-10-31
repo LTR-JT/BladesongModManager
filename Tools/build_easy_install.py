@@ -25,7 +25,7 @@ for key,value in {'ConsoleEnabled':'0','GuiConsoleEnabled':'0','GuiConsoleVisibl
  text,n=re.subn(r'(?m)^'+key+r'\s*=.*$',key+' = '+value,text);assert n==1,key
 files[ini]=text.encode('utf-8')
 mods='Bladesong/Binaries/Win64/ue4ss/Mods/mods.txt'
-text=files[mods].decode('utf-8').replace('Keybinds : 1','BladesongModFramework : 1\nBladesongModManager : 1\nKeybinds : 1')
+text=files[mods].decode('utf-8').replace('Keybinds : 1','BladesongModManager : 1\nKeybinds : 1')
 files[mods]=text.encode('utf-8')
 ps=(ROOT/'Installer/install.ps1').read_text(encoding='utf-8')
 assert '"'not in ps and '%'not in ps and 'ExecutionPolicy'not in ps

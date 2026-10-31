@@ -136,10 +136,10 @@ class Installer(unittest.TestCase):
   p,m=self.archive();metadata=json.loads(m.read_text());metadata['game_builds']=['0'*64];m.write_text(json.dumps(metadata))
   result=self.job('compatibility-local',{'path':str(m)});self.assertEqual(result['compatibility'],'framework-ready')
   metadata['capabilities']=['forge.read'];m.write_text(json.dumps(metadata))
-  self.assertEqual(self.job('compatibility-local',{'path':str(m)})['compatibility'],'requires-framework-work')
+  self.assertEqual(self.job('compatibility-local',{'path':str(m)})['compatibility'],'framework-ready')
   self.assertEqual(self.job('compatibility-local',{'path':str(m)},['forge.read'])['compatibility'],'framework-ready')
   metadata['raw_integration']={'reason':'Native fixture','game_builds':['0'*64]};m.write_text(json.dumps(metadata))
-  data=self.scripts.parent.parent/'BladesongModFramework/Data';data.mkdir(parents=True,exist_ok=True);(data/'identity.json').write_text(json.dumps({'sha256':'1'*64}))
+  exe=self.scripts.parents[3]/'Bladesong-Win64-Shipping.exe';exe.write_bytes(b'fixture executable')
   self.assertEqual(self.job('compatibility-local',{'path':str(m)},['forge.read'])['compatibility'],'raw-build-mismatch')
  def test_simple_index_validation(self):
   p=self.root/'index.json';p.write_text(json.dumps({'mods':[{'name':'Fixture','url':'https://github.com/example/fixture'}]}))

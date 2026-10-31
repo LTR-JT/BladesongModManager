@@ -2,9 +2,9 @@ from pathlib import Path
 import argparse,json,os,subprocess,sys,tempfile
 from sdk_tools import SDK_ROOT
 ROOT=Path(__file__).resolve().parents[1]
-p=argparse.ArgumentParser();p.add_argument('--lua',required=True);p.add_argument('--framework',default=os.environ.get('BMF_FRAMEWORK_ROOT',ROOT.parent/'BladesongModFramework'));a=p.parse_args();framework=Path(a.framework).resolve();lua=str(Path(a.lua).resolve())
-assert (framework/'Framework/shared/BladesongFramework/api.lua').is_file(),'A framework checkout is needed for UI integration fixtures only'
-os.environ.update(BMF_TEST_ROOT=str(ROOT),BMF_TEST_LUA=lua,BMF_FRAMEWORK_ROOT=str(framework))
+p=argparse.ArgumentParser();p.add_argument('--lua',required=True);a=p.parse_args();lua=str(Path(a.lua).resolve())
+os.environ.update(BMF_TEST_ROOT=str(ROOT),BMF_TEST_LUA=lua)
+
 def run(*cmd):subprocess.run([str(x)for x in cmd],cwd=ROOT,check=True)
 from validate_manifest import validate_manifest
 validate_manifest(json.loads((ROOT/'mod.json').read_text()))

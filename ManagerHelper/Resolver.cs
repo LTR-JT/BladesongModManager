@@ -51,7 +51,7 @@ partial class Worker {
  }
  static List<string> ValidateGraph(Dictionary<string,Choice> selected){
   var order=new List<string>();var states=new Dictionary<string,int>(StringComparer.OrdinalIgnoreCase);Action<string> visit=null;visit=id=>{int state;if(states.TryGetValue(id,out state)){Need(state!=1,"Circular dependency: "+id);return;}states[id]=1;
-   object m=selected[id].Manifest;Need(VersionOK("1.0.0",S(m,"api")),"Unsupported historical framework API: "+id);
+   object m=selected[id].Manifest;Need(Standalone(m)||VersionOK("1.0.0",S(m,"api")),"Unsupported historical framework API: "+id);
    if(G(m,"dependencies")!=null)foreach(var dep in D(G(m,"dependencies"))){Need(selected.ContainsKey(dep.Key),"Missing dependency "+dep.Key);visit(dep.Key);}
    states[id]=2;order.Add(id);
   };foreach(string id in selected.Keys)visit(id);return order;
@@ -68,12 +68,12 @@ partial class Worker {
    }
    Choice c=selected[id];bool exists=installed.ContainsKey(id);string action=c.Installed?(Enabled(id)?"keep":"enable"):(exists?"update":"install");
    if(action!="keep")Ownable(id);
-   if(!c.Installed){Need(Compatibility(c.Manifest,request)=="framework-ready","Required runtime capability unavailable: "+id);Manifest(c.Manifest);CheckTargets(c.Manifest);}
+   if(!c.Installed){Need(InstallCompatible(c.Manifest,request),"Required runtime capability unavailable: "+id);Manifest(c.Manifest);CheckTargets(c.Manifest);}
    string path=Path.Combine(work,"plan-"+id+".json");Write(path,c.Manifest);
    items.Add(Obj("id",id,"name",S(c.Manifest,"name"),"version",S(c.Manifest,"version"),"action",action,"source",c.Source==null?"":c.Source.Url,"manifest",path,"manifest_hash",Hash(path),"owner",exists?Ownership(id):OwnerID,"installed_snapshot",exists?TextHash(Json.Serialize(installed[id])):""));
   }
   string token=Guid.NewGuid().ToString("N").Substring(0,12);Write(Child(Path.Combine(Data,"plans"),token+".json"),Obj("schema_version",1,"items",items));
-  return Obj("status","complete","plan",Obj("token",token,"items",items.Select(x=>Obj("id",S(x,"id"),"name",S(x,"name"),"version",S(x,"version"),"action",S(x,"action"))).ToArray()),"message","Review the shared dependencies before installing. UE4SS bootstrap is maintained separately.");
+  return Obj("status","complete","plan",Obj("token",token,"items",items.Select(x=>Obj("id",S(x,"id"),"name",S(x,"name"),"version",S(x,"version"),"action",S(x,"action"))).ToArray()),"message","Review the dependencies before installing. Required runtime capabilities are checked after launch; UE4SS bootstrap is separate.");
  }
  static object ExecutePlan(object args,object request,string work){
   string token=S(args,"token");Need(Regex.IsMatch(token,@"^[a-f0-9]{12}$"),"Invalid plan token");object review=Read(Child(Path.Combine(Data,"plans"),token+".json"));var staged=new List<object>();var toggles=new List<object>();
@@ -86,7 +86,7 @@ partial class Worker {
    string id=S(item,"id"),action=S(item,"action");Need(Hash(S(item,"manifest"))==S(item,"manifest_hash"),"Reviewed plan changed");object m=Read(S(item,"manifest"));Metadata(m);
    if(action=="keep"){Need(Enabled(id),"Kept dependency became disabled");continue;}Ownable(id);
    if(action!="enable"){
-    Need(Compatibility(m,request)=="framework-ready","Runtime capability changed");CheckTargets(m);string directory=Child(work,id);Directory.CreateDirectory(directory);
+    Need(InstallCompatible(m,request),"Runtime capability changed");CheckTargets(m);string directory=Child(work,id);Directory.CreateDirectory(directory);
     Source source=Resolve(S(item,"source"),directory);Need(TextHash(Json.Serialize(source.Manifest))==TextHash(Json.Serialize(m)),"Release changed after plan review");
     if(source.Archive==null){source.Archive=Path.Combine(directory,"archive.zip");Fetch(S(G(m,"download"),"url"),source.Archive);Need(Hash(source.Archive)==S(G(m,"download"),"sha256"),"Archive hash mismatch");}
     string payload=StageArchive(source.Archive,m,directory);staged.Add(Obj("manifest",S(item,"manifest"),"payload",payload));

@@ -1,5 +1,4 @@
 local TEST_ROOT=os.getenv('BMF_TEST_ROOT')or 'BladesongModdingPlatform'
-local FRAMEWORK=os.getenv('BMF_FRAMEWORK_ROOT')or TEST_ROOT..'/../BladesongModFramework'
 -- Exercise the complete Open path with the actual asset's slotless SizeBox root.
 local serial=0
 local function obj(kind,name)
@@ -40,7 +39,7 @@ local panel
 local library=obj('Library')
 function library:Create(context,class)
  if class.kind=='AssetClass'then
-  panel=obj('UserWidget');panel.WidgetTree={RootWidget=obj('SizeBox','PCL_EntryRoot')}
+  panel=obj('UserWidget');panel.WidgetTree={RootWidget=obj('SizeBox','StockFrameRoot')}
   assert(panel.WidgetTree.RootWidget.Slot==nil)
   return panel
  end
@@ -50,6 +49,7 @@ local text=obj('Text');function text:Conv_StringToText(v)return v end
 function StaticFindObject(path)
  if path:find('Default__WidgetBlueprintLibrary',1,true)then return library end
  if path:find('Default__KismetTextLibrary',1,true)then return text end
+ assert(not path:find('/Game/PCL/',1,true),'Manager requested a framework/PCL asset')
  if path:find('/Game/',1,true)then return obj('AssetClass')end
  return obj(path:match('%.([^%.]+)$'))
 end
@@ -58,7 +58,7 @@ local click_hook
 function RegisterHook(path,callback)if path:find('HandleButtonClicked',1,true)then click_hook=callback end end
 local original_loadfile=loadfile
 function loadfile(path,...)
- if path:match('ui/primitives.lua$')then return function()local labels={};return {_labels=labels,tab=function(_,_,caption)labels[#labels+1]=caption end,update=function()end}end end
+ if path:match('ui/tabs.lua$')then return function()local labels={};return {_labels=labels,tab=function(_,_,caption)labels[#labels+1]=caption end,update=function()end}end end
  return original_loadfile(path,...)
 end
 local native=obj('NativeMainPage');local switcher=obj('WidgetSwitcher');switcher.active=native
@@ -66,10 +66,10 @@ function switcher:GetActiveWidget()return self.active end
 function switcher:IsCurrentlySwitching()return self.switching or false end
 function switcher:IsTransitionPlaying()return self.animating or false end
 function switcher:SetActiveWidget(w)self.active=w end
-local F={_json=assert(original_loadfile(FRAMEWORK..'/Framework/shared/BladesongFramework/json.lua'))(),_valid=function(w)return type(w)=='table'and type(w.IsValid)=='function'and w:IsValid()end,errors={}}
+local F={_json=assert(original_loadfile(TEST_ROOT..'/Manager/BladesongModManager/Scripts/json.lua'))(),_valid=function(w)return type(w)=='table'and type(w.IsValid)=='function'and w:IsValid()end,errors={}}
 function F.GetRegisteredMods()return {{id='Example',name='Example mod',version='1.0.0',description='Example description',status='registered',enabled=true},{id='ConsoleCommandsMod',name='Console commands',version='0.0.0',discovered=true}}end
-local M=assert(loadfile(TEST_ROOT..'/Manager/BladesongModManager/Scripts/manager.lua'))(F,FRAMEWORK..'/Framework/shared/BladesongFramework/',TEST_ROOT..'/Manager/BladesongModManager/Scripts/')
-M.main=obj('Main');M.main.QuitButton=obj('Button');M.main.VersionText=obj('TextBlock');M.main.WidgetSwitcher=switcher
+local M=assert(loadfile(TEST_ROOT..'/Manager/BladesongModManager/Scripts/manager.lua'))(F,TEST_ROOT..'/Manager/BladesongModManager/Scripts/',TEST_ROOT..'/Manager/BladesongModManager/Scripts/')
+M.main=obj('Main');M.main.QuitButton=obj('Button');M.main.VersionText=obj('TextBlock');M.main.WidgetSwitcher=switcher;M.main.WBP_OptionsMenu=obj('Options');M.main.WBP_OptionsMenu.ScreenModeApplyFrame=obj('AssetClass');M.main.WBP_OptionsMenu.ScreenResolutionText=obj('TextBlock')
 M.Open()
 assert(switcher.active==panel and panel.parent==switcher)
 assert(panel.Slot.horizontal==2 and panel.Slot.vertical==2)

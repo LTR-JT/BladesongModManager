@@ -60,9 +60,10 @@ partial class Worker {
   throw new Exception("No compatible component release in the newest 20 releases");
  }
  static string ManifestAsset(object m){object source=G(m,"release_source");return source==null?"mod.json":S(source,"manifest_asset","mod.json");}
+ static bool Standalone(object m){return G(m,"standalone")is bool&&(bool)G(m,"standalone");}
  static void Metadata(object m){
   Need(Convert.ToInt32(G(m,"schema_version"))==1&&Regex.IsMatch(S(m,"id"),@"^[A-Za-z0-9_-]{1,64}$")&&S(m,"name").Length>0&&S(m,"name").Length<=160&&Regex.IsMatch(S(m,"version"),@"^\d+\.\d+\.\d+(-[\w.-]+)?$"),"Invalid mod.json identity/schema");
-  Need(S(m,"api").Length>0&&S(m,"api").Length<=120,"API requirement missing");
+  Need(G(m,"standalone")==null||G(m,"standalone")is bool,"Invalid standalone flag");Need(Standalone(m)||(S(m,"api").Length>0&&S(m,"api").Length<=120),"API requirement missing");
   if(G(m,"package")!=null)Need(S(G(m,"package"),"format")=="bladesong-mod-1"&&S(G(m,"package"),"target")=="ue4ss-mods","Unsupported portable package target");
   if(G(m,"dependency_sources")!=null)foreach(var source in D(G(m,"dependency_sources"))){Need(Regex.IsMatch(source.Key,@"^[A-Za-z0-9_-]{1,64}$"),"Invalid dependency source ID");Https(Convert.ToString(source.Value));}
   object caps=G(m,"capabilities");if(caps!=null){Need(GIsArray(caps),"Capabilities must be an array");Need(A(caps).Count()<=64,"Capability count limit");foreach(object c in A(caps))Need(c is string&&Regex.IsMatch((string)c,@"^[A-Za-z0-9_.-]{1,120}$"),"Invalid capability");}
@@ -72,7 +73,7 @@ partial class Worker {
  static void Manifest(object m){
   Metadata(m);
   Need(Convert.ToInt32(G(m,"schema_version"))==1&&Regex.IsMatch(S(m,"id"),@"^[A-Za-z0-9_-]{1,64}$")&&S(m,"name").Length>0&&Regex.IsMatch(S(m,"version"),@"^\d+\.\d+\.\d+(-[\w.-]+)?$"),"Invalid manifest identity/schema");
-  Need(VersionOK("1.0.0",S(m,"api")),"Unsupported API range");Need(G(m,"signature")==null,"Unsupported signature type; cannot validate it");
+  Need(Standalone(m)||VersionOK("1.0.0",S(m,"api")),"Unsupported API range");Need(G(m,"signature")==null,"Unsupported signature type; cannot validate it");
   var files=A(G(m,"files")).ToList();Need(files.Count>0&&files.Count<=4096,"File count limit");var seen=new HashSet<string>(StringComparer.OrdinalIgnoreCase);long total=0;
   foreach(var f in files){string p=S(f,"path");Need(p!="deployment.json"&&p!="bmf-installed.json"&&p!="mod.json"&&p!="bmf-manifest.json","Reserved installation record");Child(Data,p);Need(seen.Add(p),"Duplicate file path");Need(!Regex.IsMatch(p,@"(^|/)(SaveGames|preconstructions|blades|Data)(/|$)|\.(sav|dmp|log)$",RegexOptions.IgnoreCase),"Personal data path rejected");Need(Regex.IsMatch(S(f,"sha256"),@"^[a-fA-F0-9]{64}$"),"Invalid SHA256");long size=Convert.ToInt64(G(f,"size"));Need(size>=0&&size<=67108864,"File size limit");total+=size;}
   Need(total<=268435456,"Extraction limit");
@@ -81,7 +82,7 @@ partial class Worker {
  static void Fetch(string url,string path,long limit=67108864,int timeout=30000){
   Uri u=Https(url);ServicePointManager.SecurityProtocol=SecurityProtocolType.Tls12;
   for(int hop=0;hop<6;hop++){
-   var r=(HttpWebRequest)WebRequest.Create(u);r.AllowAutoRedirect=false;r.UserAgent="BladesongModManager/0.1.0";r.Timeout=timeout;r.ReadWriteTimeout=timeout;
+   var r=(HttpWebRequest)WebRequest.Create(u);r.AllowAutoRedirect=false;r.UserAgent="BladesongModManager/0.1.1";r.Timeout=timeout;r.ReadWriteTimeout=timeout;
    string rate=Path.Combine(Data,"rate-"+TextHash(u.Host)+".json");lock(NetworkSync){if(File.Exists(rate)){DateTime until;if(DateTime.TryParse(S(Read(rate),"until"),out until)&&until.ToUniversalTime()>DateTime.UtcNow)throw new Exception("Provider rate limit cooldown; using cached metadata where available");}}
    HttpWebResponse received;try{received=(HttpWebResponse)r.GetResponse();}catch(WebException e){var failed=e.Response as HttpWebResponse;if(failed!=null){using(failed){if((int)failed.StatusCode==429||((int)failed.StatusCode==403&&(failed.Headers["X-RateLimit-Remaining"]=="0"||failed.Headers["Retry-After"]!=null))){int seconds;long reset;DateTime until=DateTime.UtcNow.AddMinutes(15);if(Int32.TryParse(failed.Headers["Retry-After"],out seconds))until=DateTime.UtcNow.AddSeconds(Math.Min(86400,Math.Max(1,seconds)));else if(Int64.TryParse(failed.Headers["X-RateLimit-Reset"],out reset))until=new DateTime(1970,1,1,0,0,0,DateTimeKind.Utc).AddSeconds(reset);lock(NetworkSync)Write(rate,Obj("until",until.ToString("o")));throw new Exception("Provider rate limit reached; cached metadata remains available");}}}throw;}
    using(var response=received){
@@ -142,17 +143,19 @@ partial class Worker {
  }
  static bool GIsArray(object x){return x is object[]||x is ArrayList;}
  static string Compatibility(object m,object request){
-  if(!VersionOK("1.0.0",S(m,"api")))return "requires-framework-work";
+  if(!Standalone(m)&&!VersionOK("1.0.0",S(m,"api")))return "requires-framework-work";
   object raw=G(m,"raw_integration");
   if(raw!=null){
    Need(S(raw,"reason").Length>0,"Raw integration exception requires a reason");
-   string identity=Child(ModsRoot,"BladesongModFramework/Data/identity.json");if(!File.Exists(identity))return "raw-build-unknown";
-   if(!A(G(raw,"game_builds")).Select(Convert.ToString).Contains(S(Read(identity),"sha256")))return "raw-build-mismatch";
+   string exe=GameExe();if(!File.Exists(exe))return "raw-build-unknown";
+   if(!A(G(raw,"game_builds")).Select(Convert.ToString).Contains(Hash(exe)))return "raw-build-mismatch";
   }
-  var caps=A(G(request,"capabilities")).Select(Convert.ToString).ToList();
-  return A(G(m,"capabilities")).Select(Convert.ToString).All(caps.Contains)?"framework-ready":"requires-framework-work";
+  // Installation metadata is checked here. Live game capabilities and exact
+  // native adapter gating remain the selected mod runtime's responsibility.
+  return Standalone(m)?"standalone-ready":"framework-ready";
  }
 
+ static bool InstallCompatible(object m,object request){string status=Compatibility(m,request);return status=="framework-ready"||status=="standalone-ready";}
  static string StageArchive(string archive,object m,string work){
   Manifest(m);string root=Path.Combine(work,"payload");Directory.CreateDirectory(root);var expected=A(G(m,"files")).ToDictionary(f=>S(f,"path"),StringComparer.OrdinalIgnoreCase);var seen=new HashSet<string>(StringComparer.OrdinalIgnoreCase);long total=0;
   using(var z=ZipFile.OpenRead(archive)){
@@ -206,7 +209,7 @@ partial class Worker {
   return Process.GetProcessesByName("Bladesong-Win64-Shipping").Any(p=>{try{return String.Equals(p.MainModule.FileName,exe,StringComparison.OrdinalIgnoreCase);}catch{return true;}finally{p.Dispose();}});
  }
  static string RemovalTarget(string id){
-  Need(Regex.IsMatch(id,@"^[A-Za-z0-9_-]{1,64}$")&&!String.Equals(id,"BladesongModFramework",StringComparison.OrdinalIgnoreCase),"The framework cannot uninstall itself");
+  Need(Regex.IsMatch(id,@"^[A-Za-z0-9_-]{1,64}$"),"Invalid mod ID");
   string root=Child(ModsRoot,id);Need(Directory.Exists(root),"Mod directory is unavailable");Ownable(id);
   foreach(string path in Records()){object mod=Read(path);if(S(mod,"id")!=id&&Enabled(S(mod,"id"))&&G(mod,"dependencies")!=null&&D(G(mod,"dependencies")).Keys.Any(k=>String.Equals(k,id,StringComparison.OrdinalIgnoreCase)))throw new Exception("Enabled mod depends on this mod: "+S(mod,"id"));}
   var pending=new Stack<string>();pending.Push(root);int count=0;
@@ -241,7 +244,7 @@ partial class Worker {
  }
  static void Stage(Source s,object args,object request,string work){
   object m=s.Manifest;Need(S(m,"id")==S(args,"expected_id")&&S(m,"version")==S(args,"expected_version"),"Source changed since review");
-  if(S(args,"expected_manifest_sha256")!="")Need(S(args,"expected_manifest_sha256")==s.Digest,"Manifest changed since review");string compatible=Compatibility(m,request);Need(compatible=="framework-ready","Required API/capability or explicit raw integration support is unavailable: "+compatible);
+  if(S(args,"expected_manifest_sha256")!="")Need(S(args,"expected_manifest_sha256")==s.Digest,"Manifest changed since review");string compatible=Compatibility(m,request);Need(compatible=="framework-ready"||compatible=="standalone-ready","Required API/capability or explicit raw integration support is unavailable: "+compatible);
   Dependencies(m);CheckTargets(m);
   if(s.Archive==null){s.Archive=Path.Combine(work,"archive.zip");Fetch(S(G(m,"download"),"url"),s.Archive);Need(Hash(s.Archive)==S(G(m,"download"),"sha256").ToLowerInvariant(),"Archive hash mismatch");}
   string payload=StageArchive(s.Archive,m,work),manifest=Path.Combine(work,"manifest.json");Write(manifest,m);string pending=Path.Combine(Data,"pending.json");
@@ -262,7 +265,7 @@ partial class Worker {
   return File.Exists(Child(ModsRoot,id+"/enabled.txt"));
  }
  static void Toggle(object args,string work){
-  string id=S(args,"id");Need(Regex.IsMatch(id,@"^[A-Za-z0-9_-]{1,64}$")&&Directory.Exists(Child(ModsRoot,id)),"Unknown mod directory");Need(!String.Equals(id,"BladesongModFramework",StringComparison.OrdinalIgnoreCase),"Disable dependent mods first; the framework cannot disable itself");
+  string id=S(args,"id");Need(Regex.IsMatch(id,@"^[A-Za-z0-9_-]{1,64}$")&&Directory.Exists(Child(ModsRoot,id)),"Unknown mod directory");
   bool enabled=Convert.ToBoolean(G(args,"enabled",!Enabled(id)));Ownable(id);
   if(!enabled)foreach(string record in Records()){var m=Read(record);if(Enabled(S(m,"id"))&&G(m,"dependencies")!=null&&D(G(m,"dependencies")).Keys.Any(k=>String.Equals(k,id,StringComparison.OrdinalIgnoreCase)))throw new Exception("Enabled dependency requires this mod: "+S(m,"id"));}
   string pending=Path.Combine(Data,"pending.json"),mods=Path.Combine(ModsRoot,"mods.txt");var plan=PendingPlan(work);
@@ -296,7 +299,7 @@ partial class Worker {
      edited=Regex.Replace(edited,@"(?m)^\s*"+Regex.Escape(S(removal,"id"))+@"\s*:\s*[01]\s*$","");
     }
     foreach(var toggle in toggles){
-     string id=S(toggle,"id");Need(Regex.IsMatch(id,@"^[A-Za-z0-9_-]{1,64}$")&&(!String.Equals(id,"BladesongModFramework",StringComparison.OrdinalIgnoreCase)||Convert.ToBoolean(G(toggle,"enabled"))),"Invalid toggle target");Need((File.Exists(mods)?Hash(mods):"")==S(toggle,"mods_hash"),"Load order changed since approval");
+     string id=S(toggle,"id");Need(Regex.IsMatch(id,@"^[A-Za-z0-9_-]{1,64}$"),"Invalid toggle target");Need((File.Exists(mods)?Hash(mods):"")==S(toggle,"mods_hash"),"Load order changed since approval");
      string line=id+" : "+(Convert.ToBoolean(G(toggle,"enabled"))?"1":"0");string pattern=@"(?m)^\s*"+Regex.Escape(id)+@"\s*:\s*[01]\s*$";
      edited=Regex.IsMatch(edited,pattern)?Regex.Replace(edited,pattern,line):edited+"\r\n"+line+"\r\n";
      string marker=Child(ModsRoot,id+"/enabled.txt");Need(File.Exists(marker)==Convert.ToBoolean(G(toggle,"marker")),"Enable marker changed");
@@ -346,7 +349,7 @@ partial class Worker {
      string record=Path.Combine(directory,"bmf-installed.json"),manifest=Path.Combine(directory,"mod.json");if(!File.Exists(manifest))manifest=Path.Combine(directory,"bmf-manifest.json");object m=null;try{m=File.Exists(record)?Read(record):File.Exists(manifest)?Read(manifest):null;if(m!=null){Metadata(m);Need(S(m,"id")==id,"Installed mod ID mismatch");D(m)["integration"]="manifest";}}catch(Exception e){m=Obj("id",id,"name",id,"version","0.0.0","api","^1.0.0","integration","invalid-manifest","description","Invalid manifest: "+e.Message);}
      if(m==null&&File.Exists(Path.Combine(directory,"Scripts/main.lua")))m=Obj("id",id,"name",id,"version","0.0.0","api","^1.0.0","description","Unmanaged UE4SS mod; version and compatibility unknown");
      if(m!=null){if(G(m,"integration")==null)D(m)["integration"]="ordinary";D(m)["install_owner"]=Ownership(id);D(m)["enabled"]=Enabled(id);D(m)["discovered"]=true;mods.Add(m);}
-    }return Obj("status","complete","mods",mods,"last_apply",File.Exists(Path.Combine(Data,"last-apply.json"))?Read(Path.Combine(Data,"last-apply.json")):null);
+    }return Obj("status","complete","mods",mods,"identity",File.Exists(GameExe())?Obj("game",FileVersionInfo.GetVersionInfo(GameExe()).FileVersion):null,"last_apply",File.Exists(Path.Combine(Data,"last-apply.json"))?Read(Path.Combine(Data,"last-apply.json")):null);
    }
    case "inspect":{Source s=Resolve(S(args,"url"),work);var m=D(s.Manifest);m["source"]=s.Url;m["manifest_sha256"]=s.Digest;m["compatibility"]=Compatibility(m,request);return Obj("status","complete","mod",m);}
    case "uninstall":PrepareUninstall(args,work);return Restart();

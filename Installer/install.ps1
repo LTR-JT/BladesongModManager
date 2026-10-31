@@ -53,7 +53,7 @@ foreach ($process in @(Get-Process -Name 'Bladesong-Win64-Shipping' -ErrorAction
 };
 if (!$quiet) {
  Write-Host ('Install Mod Manager + UE4SS into: '+$root);
- Write-Host 'Verified manual framework/manager installations will be maintained by the in-game manager after installation.';
+ Write-Host 'Verified manual manager installations will be maintained by the in-game manager after installation.';
  if ((Read-Host 'Press Enter to install, or type N to cancel') -match '^[Nn]') { exit 0; };
 };
 $manifest=Get-Content -LiteralPath (Join-Path $source 'INSTALL_MANIFEST.json') -Raw | ConvertFrom-Json;
@@ -65,7 +65,7 @@ foreach ($file in $files) {
  if (!(Test-Path -LiteralPath $from -PathType Leaf) -or (FileHash $from) -ne $file.sha256) { throw 'Package verification failed. Extract the ZIP again.'; };
  if (Test-Path -LiteralPath $to -PathType Container) { throw ('A folder blocks installation: '+$to); };
 };
-foreach ($id in @('BladesongModFramework','BladesongModManager')) {
+foreach ($id in @('BladesongModManager')) {
  $base='Bladesong/Binaries/Win64/ue4ss/Mods/'+$id+'/';
  $ownerPath=SafePath $root ($base+'deployment.json');
  $receiptPath=SafePath $root ($base+'bmf-installed.json');
@@ -106,7 +106,7 @@ try {
   Copy-Item -LiteralPath (Join-Path $source $file.path) -Destination $to -Force;
  };
  $lines=if (@($oldMods).Count) { @($oldMods); } else { @(Get-Content -LiteralPath $modsPath); };
- foreach ($id in @('BPML_GenericFunctions','BPModLoaderMod','BladesongModFramework','BladesongModManager')) {
+ foreach ($id in @('BPML_GenericFunctions','BPModLoaderMod','BladesongModManager')) {
   $pattern='^\s*'+[regex]::Escape($id)+'\s*:';
   $lines=@($lines | Where-Object { $_ -notmatch $pattern; });
   $lines+=($id+' : 1');

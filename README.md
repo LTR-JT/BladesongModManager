@@ -1,30 +1,27 @@
 # Bladesong Mod Manager
 
-Optional in-game mod management for Bladesong: discovery, reviewed dependency plans, install/update, enable/disable, uninstall and safe manual adoption. Source candidate 0.1.0.
+Standalone in-game mod management for Bladesong. Requires working UE4SS, **not BladesongModFramework**. Source candidate 0.1.1.
 
-Requires [BladesongModFramework](https://github.com/LTR-JT/BladesongModFramework) 0.1.8 or newer on API 1.0.0 and working UE4SS. The framework and PCL operate without this manager.
+The manager owns the main-menu Mods entry, catalogue, dependency plans, install/update, uninstall and ownership tools. Its services, JSON parser, menu container and tab renderer are self-contained. It uses stock game widgets and never loads a framework module or PCL asset to open its menu.
 
-## Player installation
+[BladesongModFramework](https://github.com/LTR-JT/BladesongModFramework) owns the shared Creative menu base and compatibility services for SDK mods. If a selected mod requires it, the manager adds one compatible framework to the reviewed dependency plan. The manager itself keeps running without it.
 
-Close Bladesong, extract the Easy Install With UE4SS package, and run INSTALL.cmd. It installs configured UE4SS, one shared framework and this optional manager. Debug windows are disabled. If UE4SS is installed already, use the smaller Bootstrap ZIP. This is one-time setup, not a player-facing launcher. These split packages are currently unpublished candidates.
+## Installing
+
+Close Bladesong, extract the Easy Install With UE4SS package and run INSTALL.cmd. This installs UE4SS and the manager only. With UE4SS already installed, copy the manager Runtime ZIP and enable BladesongModManager in Mods/mods.txt. Framework and PCL are not bundled. Existing framework files and saves are preserved. Split packages remain unpublished pending in-game verification.
 
 ## Building
 
-Clone BladesongSDK beside this checkout for build-time schema and packaging tools. Manager helper compilation and ordinary manager-only packaging do not rebuild the framework. UI integration fixtures additionally use a framework source checkout. Both reviewed source revisions are recorded in BuildDependencies.json; use BMF_SDK_ROOT and BMF_FRAMEWORK_ROOT for alternate local locations.
+BladesongSDK is a build-time schema/packaging dependency only, pinned in BuildDependencies.json. No framework source checkout or installation is needed.
 
 ```powershell
 python Tools/run_checks.py --lua C:/path/to/lua.exe
 python Tools/package_release.py
-```
-
-To build a first-install bootstrap, first build a verified framework Runtime ZIP from its repository, then:
-
-```powershell
-python Tools/build_bootstrap.py --framework-archive ../BladesongModFramework/Releases/BladesongModFramework_0.1.8_Runtime.zip
+python Tools/build_bootstrap.py
 python Tools/build_easy_install.py
 python Tools/check_packages.py
 ```
 
-The UE4SS snapshot is hash-pinned to an immutable historical source URL and fetched only by the packaging tool if absent. No runtime code depends on another manager. Vortex integration is future work and is not claimed as verified.
+SDK runtime capability checks are deferred to the framework after launch; package planning validates API and dependency metadata. Explicit raw-native manifests still require an exact executable hash. Optional SDK settings/page access uses serialized runtime messages only when a framework is running.
 
-The existing implementation was extracted from BladesongModFramework, preserving attribution and its original repository history. See UPSTREAM.md. Releases require explicit manual dispatch; pushing source does not publish a release. MIT license.
+With the legacy combined framework installed, its old Mods button is collapsed without destroying the widget; the standalone manager supplies the active button. Creative UI is unchanged. Provenance and MIT attribution are preserved in UPSTREAM.md and LICENSE. Releases are manual; source pushes do not publish a release.

@@ -7,7 +7,7 @@ function C.StartJob(operation,args,callback,progress)
  local id='job_'..os.time()..'_'..math.floor(os.clock()*1000000)..'_'..C.sequence
  local base=root..'../'
  local path=base..id..'.json'
- local capabilities={};for name in pairs(F._map.capabilities)do if F.HasCapability(name)then capabilities[#capabilities+1]=name end end
+ local capabilities={}
  local file=assert(io.open(path,'wb'));assert(file:write(J.encode({id=id,operation=operation,args=args or {},capabilities=capabilities})));assert(file:close())
  C.launch=C.launch or assert(package.loadlib(base..'Scripts/bmm-launch.dll','bmf_launch'))
  local bytes=base..'Scripts/bmm-worker.exe'..'\0'..path

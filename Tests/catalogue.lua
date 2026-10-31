@@ -1,5 +1,4 @@
 local TEST_ROOT=os.getenv('BMF_TEST_ROOT')or 'BladesongModdingPlatform'
-local FRAMEWORK=os.getenv('BMF_FRAMEWORK_ROOT')or TEST_ROOT..'/../BladesongModFramework'
 local C=assert(loadfile(TEST_ROOT..'/Manager/BladesongModManager/Scripts/catalogue.lua'))()
 local mods={{id='ConsoleCommandsMod'},{id='PreconstructionLibraryProbe'},
  {id='BladesongModFramework'},{id='OtherCommunityMod',discovered=true},{id='BPModLoaderMod'}}

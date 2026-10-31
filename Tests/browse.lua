@@ -1,5 +1,4 @@
 local root=os.getenv('BMF_TEST_ROOT')or 'BladesongModdingPlatform'
-local FRAMEWORK=os.getenv('BMF_FRAMEWORK_ROOT')or root..'/../BladesongModFramework'
 local M,F,text,obj=assert(loadfile(root..'/Tests/manager_open.lua'))()
 local jobs,settings={},{}
 function F.GetSettings()return {registry_url=''}end

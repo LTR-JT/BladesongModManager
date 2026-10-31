@@ -1,5 +1,5 @@
 local F,root,manager_root=...
-manager_root=manager_root or root..'../../BladesongModManager/Scripts/'
+manager_root=manager_root or root
 
 local J=F._json
 local catalogue=assert(loadfile(manager_root..'catalogue.lua'))()
@@ -170,7 +170,7 @@ function M.Render()
   for _,item in ipairs(M.install_plan.items or {})do line(item.action..' — '..item.name..' '..item.version,nil,23)end
   action('Confirm installation & restart',function()local token=M.install_plan.token;M.install_plan=nil;M.quit_after_job=true;M.Job('install',{token=token})end)
   action('Cancel installation',function()M.install_plan=nil;M.Render()end)
-  line('Shared dependencies are installed once. UE4SS bootstrap is separate.',nil,22)
+  line('Shared dependencies are installed once. SDK capabilities are checked by their runtime after launch.',nil,22)
  end
  if M.adoption then
   line(M.adoption.message,nil,23)
@@ -195,7 +195,7 @@ function M.Render()
    if mod.version and mod.version~='0.0.0'then local vs=heading:AddChildToHorizontalBox(label(M.panel,'v'..mod.version,24));vs:SetVerticalAlignment(2)end
    if mod.author and mod.author~=''then line('By '..mod.author,body,23)end
    if mod.description and mod.description~=''and not mod.discovered then line(mod.description,body)end
-   line((mod.enabled==false and 'Disabled'or 'Enabled')..'  |  '..(mod.integration=='ordinary'and 'Ordinary UE4SS mod'or(mod.integration=='manifest'and 'Manifest integration'or 'SDK integration')),body,24)
+   line((mod.enabled==false and 'Disabled'or 'Enabled')..'  |  '..(mod.standalone and 'Standalone UE4SS mod'or(mod.integration=='ordinary'and 'Ordinary UE4SS mod'or(mod.integration=='manifest'and 'Manifest integration'or 'SDK integration'))),body,24)
    if mod.integration=='ordinary'then line('Uses its own game interfaces; behavior has not been verified by the framework.',body,23)elseif mod.compatibility then line('Compatibility: '..mod.compatibility.state..' (behavior not automatically verified)',body,23)end
    for _,failure in ipairs(mod.failures or {})do line(failure,body,24)end
    for page,definition in pairs(mod.pages or {})do action(definition.title or page,function()M.Close();F.SendPage(mod.id,page)end,body)end
@@ -251,7 +251,7 @@ function M.Render()
 
  else
 
-  line('Framework '..F.VERSION..' | API '..F.API_VERSION);line('Game: '..F.GetGameVersion()..' | Branch: '..F.GetGameBranch()..' | Profile: '..F.GetCompatibilityProfile())
+  line('Mod Manager '..F.VERSION..' | Standalone UE4SS mod');line('Game: '..F.GetGameVersion()..' | Optional framework: '..F.GetFrameworkStatus())
 
   line('Compatibility is capability-based; Main and Bleeding Edge are not both runtime tested.')
 
@@ -314,11 +314,13 @@ function M.Open()
 
  M.Close()
 
- local class=loadasset('/Game/PCL/UI/WBP_PCL_LibraryEntry.WBP_PCL_LibraryEntry_C');assert(valid(class),'Shared PCL menu asset unavailable')
+ local options=M.main.WBP_OptionsMenu;assert(valid(options),'Native Options menu unavailable')
+ local template=options.ScreenModeApplyFrame;assert(valid(template),'Native menu frame unavailable')
+ local class=template:GetClass()
 
  local panel=widget(M.main,class);M.panel=panel
 
- local rootbox=find(panel.WidgetTree.RootWidget,'PCL_EntryRoot');assert(valid(rootbox),'Existing PCL root unavailable')
+ local rootbox=new(panel,'SizeBox');panel.WidgetTree.RootWidget=rootbox
 
  rootbox:SetWidthOverride(1600);rootbox:SetMaxDesiredWidth(1600);rootbox:SetHeightOverride(1740)
 
@@ -330,17 +332,17 @@ function M.Open()
 
  local nav=new(panel,'CanvasPanel');local navbox=new(panel,'SizeBox');navbox:SetHeightOverride(80);navbox:SetContent(nav);add(body,navbox)
 
- local env=setmetatable({}, {__index=_G});env.pcl151723_new=new;env.pcl151723_label=function(p,c,size)return label(p,c,size)end;env.pcl15171_to_text=text;env.is_valid=valid
+ local env=setmetatable({}, {__index=_G});env.bmm_new=new;env.bmm_label=function(p,c,size)return label(p,c,size)end;env.bmm_to_text=text;env.is_valid=valid
 
- env.pcl151762_transparent_style=function()return loadasset('/Game/UI/Style/ButtonStyle_Transparent.ButtonStyle_Transparent_C')end
+ env.bmm_transparent_style=function()return loadasset('/Game/UI/Style/ButtonStyle_Transparent.ButtonStyle_Transparent_C')end
 
- env.pcl151762_remove_native_chrome=function()end
+ env.bmm_remove_native_chrome=function()end
 
- env.pcl151762_button=function(_,_,c,_,extra)return button(panel,c,function()M.page=extra.tab_id;M.tabstate.active_tab_id=M.page;M.Render();M.tabs.update(M.tabstate)end)end
+ env.bmm_button=function(_,_,c,_,extra)return button(panel,c,function()M.page=extra.tab_id;M.tabstate.active_tab_id=M.page;M.Render();M.tabs.update(M.tabstate)end)end
 
- local tabs=assert(loadfile(root..'ui/primitives.lua','t',env))();M.tabs=tabs
+ local tabs=assert(loadfile(manager_root..'ui/tabs.lua','t',env))();M.tabs=tabs
 
- env.PCL_FOLDER_TABS={is_active=function(id,state)return id==state.active_tab_id end}
+ env.BMM_TABS={is_active=function(id,state)return id==state.active_tab_id end}
 
  local ts={home=panel,folder_tabs={},active_tab_id=M.page};M.tabstate=ts
 
@@ -355,7 +357,7 @@ function M.Open()
  M.previous_page=M.switcher:GetActiveWidget();local pageslot=M.switcher:AddChild(panel);pageslot:SetHorizontalAlignment(2);pageslot:SetVerticalAlignment(2)
  M.awaiting_page=true;M.page_requested_at=os.time()
  M.switcher:SetActiveWidget(panel)
- print('[BMF] Mods page requested through native menu switcher\n')
+ print('[BMM] Mods page requested through native menu switcher\n')
 
 
 end
@@ -365,7 +367,7 @@ function M.DrainActions()
  local pending=M.pending_actions;M.pending_actions={}
  for _,entry in ipairs(pending)do
   if valid(entry.widget)and M.actions[entry.widget:GetAddress()]==entry then
-   local ok,why=pcall(entry.callback);if not ok then F.errors[#F.errors+1]=tostring(why);print('[BMF] '..tostring(why)..'\n')end
+   local ok,why=pcall(entry.callback);if not ok then F.errors[#F.errors+1]=tostring(why);print('[BMM] '..tostring(why)..'\n')end
   end
  end
 end
@@ -377,12 +379,12 @@ function M.Monitor()
   if M.switcher:IsCurrentlySwitching()or M.switcher:IsTransitionPlaying()then return end
   local active=M.switcher:GetActiveWidget()
   if valid(active)and active:GetAddress()==M.panel:GetAddress()then
-   if M.awaiting_page then print('[BMF] Mods page active; native transition settled\n')end
+   if M.awaiting_page then print('[BMM] Mods page active; native transition settled\n')end
    M.awaiting_page=false
    return
   elseif M.awaiting_page then
    if os.time()-(M.page_requested_at or os.time())<5 then return end
-   print('[BMF] Mods page activation timed out; returning to previous native page\n')
+   print('[BMM] Mods page activation timed out; returning to previous native page\n')
    if valid(M.previous_page)then M.switcher:SetActiveWidget(M.previous_page)end
    M.Close()
   else M.Close()end
@@ -401,6 +403,17 @@ function M.Monitor()
   local old=M.entries[M.main:GetAddress()];if old and valid(old)and valid(old:GetParent())then M.entry=old;M.actions[old:GetAddress()]={widget=old,callback=M.Open};return end
 
   local options=M.main.OptionsButton
+  -- Legacy combined framework builds also add Mods. Keep their widget alive but
+  -- collapsed so their monitor will not recreate it or receive pointer clicks.
+  local old_parent=options:GetParent()
+  for i=0,old_parent:GetChildrenCount()-1 do
+   local child=old_parent:GetChildAt(i)
+   local known,is_button=pcall(function()return child:IsA(options:GetClass())end)
+   if child~=M.entry and known and is_button then
+    local ok,caption=pcall(function()return plain(child.Caption)end)
+    if ok and type(caption)=='string'and caption:lower()=='mods'then child:SetVisibility(1)end
+   end
+  end
   local parent=options:GetParent()
   assert(valid(parent)and parent:IsA(obj('/Script/UMG.WrapBox')),'Native main-menu WrapBox unavailable')
   local function copy_slot(slot)
@@ -424,7 +437,7 @@ function M.Monitor()
   apply_slot(parent:AddChildToWrapBox(entry),style)
   for _,item in ipairs(tail)do apply_slot(parent:AddChildToWrapBox(item.widget),item.style)end
   M.entry=entry
-  M.entries[M.main:GetAddress()]=M.entry;print('[BMF] Native main-menu Mods button attached\n')
+  M.entries[M.main:GetAddress()]=M.entry;print('[BMM] Native main-menu Mods button attached\n')
 
  end
 

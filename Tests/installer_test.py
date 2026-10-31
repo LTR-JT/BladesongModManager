@@ -6,7 +6,7 @@ SCRIPT=(ROOT/'Installer/install.ps1').read_text(encoding='utf-8')
 class Installer(unittest.TestCase):
  def setup_fixture(self,folder):
   source=folder/'package';game=folder/'game';exe=game/'Bladesong/Binaries/Win64/Bladesong-Win64-Shipping.exe';exe.parent.mkdir(parents=True);exe.write_bytes(b'fixture, never executed')
-  files={'Bladesong/Binaries/Win64/dwmapi.dll':b'new proxy','Bladesong/Binaries/Win64/ue4ss/UE4SS.dll':b'new runtime','Bladesong/Binaries/Win64/ue4ss/Mods/mods.txt':b'BPModLoaderMod : 1\nKeybinds : 1\n','Bladesong/Binaries/Win64/ue4ss/Mods/BladesongModFramework/Scripts/main.lua':b'framework','Bladesong/Content/Paks/LogicMods/PCLAnchor.pak':b'own asset'}
+  files={'Bladesong/Binaries/Win64/dwmapi.dll':b'new proxy','Bladesong/Binaries/Win64/ue4ss/UE4SS.dll':b'new runtime','Bladesong/Binaries/Win64/ue4ss/Mods/mods.txt':b'BPModLoaderMod : 1\nKeybinds : 1\n','Bladesong/Binaries/Win64/ue4ss/Mods/BladesongModManager/Scripts/main.lua':b'framework','Bladesong/Content/Paks/LogicMods/PCLAnchor.pak':b'own asset'}
   for relative,data in files.items():
    p=source/relative;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(data)
   (source/'INSTALL_MANIFEST.json').write_text(json.dumps({'files':[{'path':p,'sha256':hashlib.sha256(data).hexdigest()}for p,data in files.items()]}))
@@ -25,7 +25,7 @@ class Installer(unittest.TestCase):
    backups=list((game/'BMF_Backups').glob('*/Bladesong/Binaries/Win64/dwmapi.dll'));self.assertEqual(len(backups),1);self.assertEqual(backups[0].read_bytes(),b'old proxy')
  def test_bootstrap_does_not_take_over_external_deployment(self):
   with tempfile.TemporaryDirectory(dir=ROOT/'Tests')as temp:
-   source,game,_=self.setup_fixture(Path(temp));mod=game/'Bladesong/Binaries/Win64/ue4ss/Mods/BladesongModFramework';mod.mkdir(parents=True);(mod/'deployment.json').write_text(json.dumps({'schema_version':1,'owner':'vortex'}))
+   source,game,_=self.setup_fixture(Path(temp));mod=game/'Bladesong/Binaries/Win64/ue4ss/Mods/BladesongModManager';mod.mkdir(parents=True);(mod/'deployment.json').write_text(json.dumps({'schema_version':1,'owner':'vortex'}))
    result=self.run_installer(source,game);self.assertNotEqual(result.returncode,0);self.assertFalse((game/'BMF_Backups').exists());self.assertEqual(json.loads((mod/'deployment.json').read_text())['owner'],'vortex')
  def test_bad_package_is_refused_before_writes(self):
   with tempfile.TemporaryDirectory(dir=ROOT/'Tests')as temp:

@@ -21,37 +21,15 @@ jobs:
         run: |
           $buildDependencies = Get-Content BuildDependencies.json -Raw | ConvertFrom-Json
           'sdk_ref=' + $buildDependencies.sdk.ref >> $env:GITHUB_OUTPUT
-          'framework_ref=' + $buildDependencies.framework.ref >> $env:GITHUB_OUTPUT
       - uses: actions/checkout@v4
         with:
           repository: LTR-JT/BladesongSDK
           ref: ${{ steps.deps.outputs.sdk_ref }}
           path: BladesongSDK
-      - uses: actions/checkout@v4
-        with:
-          repository: LTR-JT/BladesongModFramework
-          ref: ${{ steps.deps.outputs.framework_ref }}
-          path: BladesongModFramework
       - run: python Tools/build_ci_lua.py
       - run: python Tools/run_checks.py --lua Tests/ci-lua/lua.exe
-      - name: Build the explicitly pinned framework bootstrap dependency
-        shell: pwsh
-        run: |
-          python ../BladesongModFramework/Tools/build_worker.py
-          if ($LASTEXITCODE -ne 0) { throw 'Runtime helper build failed' }
-          python ../BladesongModFramework/Tools/build_native.py --build 25940006
-          if ($LASTEXITCODE -ne 0) { throw 'BE adapter build failed' }
-          python ../BladesongModFramework/Tools/build_native.py --build 25431485
-          if ($LASTEXITCODE -ne 0) { throw 'Main adapter build failed' }
-          python ../BladesongModFramework/Tools/package_release.py
-          if ($LASTEXITCODE -ne 0) { throw 'Framework package build failed' }
       - run: python Tools/package_release.py
-      - name: Assemble one-time bootstrap
-        shell: pwsh
-        run: |
-          $frameworkVersion = (Get-Content ../BladesongModFramework/mod.json -Raw | ConvertFrom-Json).version
-          python Tools/build_bootstrap.py --framework-archive "../BladesongModFramework/Releases/BladesongModFramework_${frameworkVersion}_Runtime.zip"
-          if ($LASTEXITCODE -ne 0) { throw 'Bootstrap assembly failed' }
+      - run: python Tools/build_bootstrap.py
       - run: python Tools/build_easy_install.py
       - run: python Tools/check_packages.py
       - uses: actions/upload-artifact@v4

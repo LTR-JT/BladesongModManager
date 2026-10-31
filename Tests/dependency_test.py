@@ -30,6 +30,15 @@ class Dependencies(Installer):
   meta=self.metadata('BladesongModManager');m=json.loads(meta.read_text());m['release_source']={'type':'github','repository':'https://github.com/LTR-JT/BladesongModFramework','tag_prefix':'manager-v','manifest_asset':'BladesongModManager.mod.json'};meta.write_text(json.dumps(m))
   releases=self.root/'releases.json';releases.write_text(json.dumps([{'tag_name':'v0.1.9','assets':[{'name':'mod.json','browser_download_url':'https://example.org/framework.json'}]},{'tag_name':'manager-v0.1.1','assets':[{'name':'BladesongModManager.mod.json','browser_download_url':'https://example.org/manager.json'}]}]))
   result=self.job('select-component-release-local',{'manifest':str(meta),'releases':str(releases)});self.assertEqual(result['url'],'https://example.org/manager.json')
+ def test_standalone_plan_needs_no_framework_but_sdk_mod_resolves_it(self):
+  root=self.metadata('StandaloneTool');m=json.loads(root.read_text());m.pop('api');m['standalone']=True;root.write_text(json.dumps(m));result=self.graph(root,{})
+  self.assertEqual(result['status'],'complete',result);self.assertEqual([x['id']for x in result['plan']['items']],['StandaloneTool'])
+  framework=self.metadata('BladesongModFramework',version='0.1.8');mod=self.metadata('SDKMod',{'BladesongModFramework':'^0.1.4'});meta=json.loads(mod.read_text());meta['capabilities']=['forge.read'];mod.write_text(json.dumps(meta))
+  result=self.graph(mod,{'BladesongModFramework':[framework]});self.assertEqual(result['status'],'complete',result);self.assertEqual([x['id']for x in result['plan']['items']],['BladesongModFramework','SDKMod'])
+ def test_framework_can_be_removed_when_no_installed_mod_requires_it(self):
+  folder=self.scripts.parent.parent/'BladesongModFramework';folder.mkdir();(folder/'deployment.json').write_text(json.dumps({'schema_version':1,'owner':'bladesong-in-game'}));(folder/'enabled.txt').write_text('');(folder/'mod.json').write_text(json.dumps({'schema_version':1,'id':'BladesongModFramework','name':'Framework','version':'0.1.8','api':'^1.0.0'}))
+  result=self.job('uninstall',{'id':'BladesongModFramework'});self.assertEqual(result['status'],'waiting_for_exit',result)
+  complete=self.scripts.parent/'Data/last-apply.json';self.wait_for(complete.exists);self.assertEqual(json.loads(complete.read_text())['status'],'complete');self.assertFalse(folder.exists())
  def test_api_contract_and_ue4ss_are_distinct(self):
   root=self.metadata('Root',api='^2.0.0');self.assertEqual(self.graph(root,{})['status'],'failed')
   root=self.metadata('Root');m=json.loads(root.read_text());m['runtime_components']={'UE4SS':'*'};root.write_text(json.dumps(m));result=self.graph(root,{});self.assertEqual(result['status'],'failed');self.assertIn('bootstrap',result['error'])

@@ -1,5 +1,4 @@
 local TEST_ROOT=os.getenv('BMF_TEST_ROOT')or 'BladesongModdingPlatform'
-local FRAMEWORK=os.getenv('BMF_FRAMEWORK_ROOT')or TEST_ROOT..'/../BladesongModFramework'
 local nextid=0
 local function object(t)t=t or {};nextid=nextid+1;t.id=nextid;function t:IsValid()return true end;function t:GetAddress()return self.id end;return t end
 local wrapClass=object()
@@ -21,11 +20,13 @@ function parent:GetChildIndex(w)for i,c in ipairs(self.children)do if c==w then 
 function parent:AddChildToWrapBox(w)self.children[#self.children+1]=w;w.parent=self;w.Slot=slot();return w.Slot end
 local template=object();local style=object();function style:GetClass()return style end
 local function btn(name)
- local b=object({name=name,MinWidth=800,MinHeight=120})
+ local b=object({name=name,Caption=name,MinWidth=800,MinHeight=120})
  function b:GetParent()return self.parent end
  function b:RemoveFromParent()local i=self.parent:GetChildIndex(self);table.remove(self.parent.children,i+1);self.parent=nil end
  function b:GetClass()return template end
  function b:GetStyle()return style end
+ function b:IsA(c)return c==template end
+ function b:SetVisibility(value)self.visibility=value end
  function b:SetStyle()end;function b:SetCaption(c)self.name=c end
  function b:SetMinDimensions(w,h)self.MinWidth=w;self.MinHeight=h end
  function b:SetToolTipText()end
@@ -45,7 +46,7 @@ end
 function RegisterHook()end
 function FindAllOf(name)assert(name=='WBP_MainMenu_C');return {main}end
 local F={_valid=function(o)return type(o)=='table'and o.IsValid end,errors={}}
-local M=assert(loadfile(TEST_ROOT..'/Manager/BladesongModManager/Scripts/manager.lua'))(F,FRAMEWORK..'/Framework/shared/BladesongFramework/',TEST_ROOT..'/Manager/BladesongModManager/Scripts/')
+local M=assert(loadfile(TEST_ROOT..'/Manager/BladesongModManager/Scripts/manager.lua'))(F,TEST_ROOT..'/Manager/BladesongModManager/Scripts/',TEST_ROOT..'/Manager/BladesongModManager/Scripts/')
 M.Monitor()
 assert(#parent.children==8 and parent.children[5]==M.entry and parent.children[6]==original[5])
 assert(M.entry.MinWidth==800 and M.entry.MinHeight==120)
@@ -68,3 +69,9 @@ M.panel=panel2;M.switcher=switcher;M.previous_page=original[1];switcher.active=o
 M.Monitor();assert(switcher.active==original[2]and panel2.removed and M.panel==nil)
 assert(M.actions[M.entry:GetAddress()])
 print('PASS: Close restores native page; native Back/navigation cleans up without overriding destination; entry remains clickable')
+
+M.entry:RemoveFromParent();M.entry=nil;M.entries={}
+local legacy=btn('Mods');parent:AddChildToWrapBox(legacy);M.Monitor()
+assert(legacy.visibility==1 and legacy:GetParent()==parent,'Legacy combined-manager button was not safely collapsed')
+assert(M.entry and M.entry~=legacy)
+print('PASS: standalone manager supersedes the legacy combined Mods button without destroying its widget')
