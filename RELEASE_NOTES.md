@@ -1,5 +1,5 @@
-Unpublished standalone manager 0.1.2 candidate
+Unpublished standalone manager 0.1.3 candidate
 
-Fixed the Mods button disappearing when UE4SS returns a fresh Lua proxy for the same native widget. Legacy combined-manager filtering now compares native addresses, preserves the standalone button and restores its visibility. Added a regression reproducing the disappearing button with distinct wrappers sharing a native address.
+Explicitly enable input on the stock manager page container and set SelfHitTestInvisible so its child controls remain clickable. Decorative stock-widget defaults no longer suppress the whole manager input tree. Added a regression with inherited disabled/hit-test-invisible defaults and diagnostic logging of those inherited values.
 
-The manager still runs on UE4SS alone. Creative base UI and SDK compatibility remain in the optional framework. No release publication is authorized; live verification of this fix is pending.
+The manager requires UE4SS only. The optional framework remains responsible for shared Creative UI and SDK game compatibility. Previous native-proxy button visibility fix is retained. Live in-game verification is pending; no release is authorized.

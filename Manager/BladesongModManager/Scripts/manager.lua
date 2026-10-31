@@ -319,8 +319,13 @@ function M.Open()
  local class=template:GetClass()
 
  local panel=widget(M.main,class);M.panel=panel
+ local inherited_visibility=panel:GetVisibility();local inherited_enabled=panel:GetIsEnabled()
+ -- The stock tutorial frame is decorative. Its input flags must not disable
+ -- the manager's complete descendant tree. SelfHitTestInvisible keeps children interactive.
+ panel:SetVisibility(4);panel:SetIsEnabled(true)
+ print('[BMM] Manager input root enabled; inherited_visibility='..tostring(inherited_visibility)..' inherited_enabled='..tostring(inherited_enabled)..'\n')
 
- local rootbox=new(panel,'SizeBox');panel.WidgetTree.RootWidget=rootbox
+ local rootbox=new(panel,'SizeBox');rootbox:SetVisibility(4);rootbox:SetIsEnabled(true);panel.WidgetTree.RootWidget=rootbox
 
  rootbox:SetWidthOverride(1600);rootbox:SetMaxDesiredWidth(1600);rootbox:SetHeightOverride(1740)
 

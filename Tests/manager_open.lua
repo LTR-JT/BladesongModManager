@@ -3,7 +3,7 @@ local TEST_ROOT=os.getenv('BMF_TEST_ROOT')or 'BladesongModdingPlatform'
 local serial=0
 local function obj(kind,name)
  serial=serial+1
- local w={kind=kind,name=name or kind,id=serial,children={},Font={Size=24},WidgetStyle={Padding={},TextStyle={Font={}},BackgroundImageNormal={},BackgroundImageHovered={},BackgroundImageFocused={},BackgroundImageReadOnly={}}}
+ local w={kind=kind,name=name or kind,id=serial,children={},visibility=0,enabled=true,Font={Size=24},WidgetStyle={Padding={},TextStyle={Font={}},BackgroundImageNormal={},BackgroundImageHovered={},BackgroundImageFocused={},BackgroundImageReadOnly={}}}
  function w:IsValid()return true end
  function w:GetAddress()return self.id end
  function w:GetFName()return {ToString=function()return self.name end}end
@@ -31,7 +31,11 @@ local function obj(kind,name)
  function w:GetText()return self.text end
  function w:SetHintText(v)self.hint=v end
  function w:SetCaption(v)self.caption=v end
- for _,method in ipairs({'SetForegroundColor','SetStyle','SetMinDimensions','SetToolTipText','SetFont','SetAutoWrapText','SetVisibility','SetColorAndOpacity','SetWidthOverride','SetMaxDesiredWidth','SetHeightOverride','SetBrushColor','SetPadding'})do w[method]=function()end end
+ function w:SetVisibility(v)self.visibility=v end
+ function w:SetIsEnabled(v)self.enabled=v end
+ function w:GetVisibility()return self.visibility end
+ function w:GetIsEnabled()return self.enabled end
+ for _,method in ipairs({'SetForegroundColor','SetStyle','SetMinDimensions','SetToolTipText','SetFont','SetAutoWrapText','SetColorAndOpacity','SetWidthOverride','SetMaxDesiredWidth','SetHeightOverride','SetBrushColor','SetPadding'})do w[method]=function()end end
  function w:AddToViewport()error('Must use native menu switcher, not a viewport overlay')end
  return w
 end
@@ -39,7 +43,7 @@ local panel
 local library=obj('Library')
 function library:Create(context,class)
  if class.kind=='AssetClass'then
-  panel=obj('UserWidget');panel.WidgetTree={RootWidget=obj('SizeBox','StockFrameRoot')}
+  panel=obj('UserWidget');panel.visibility=3;panel.enabled=false;panel.WidgetTree={RootWidget=obj('SizeBox','StockFrameRoot')}
   assert(panel.WidgetTree.RootWidget.Slot==nil)
   return panel
  end
@@ -72,6 +76,7 @@ local M=assert(loadfile(TEST_ROOT..'/Manager/BladesongModManager/Scripts/manager
 M.main=obj('Main');M.main.QuitButton=obj('Button');M.main.VersionText=obj('TextBlock');M.main.WidgetSwitcher=switcher;M.main.WBP_OptionsMenu=obj('Options');M.main.WBP_OptionsMenu.ScreenModeApplyFrame=obj('AssetClass');M.main.WBP_OptionsMenu.ScreenResolutionText=obj('TextBlock')
 M.Open()
 assert(switcher.active==panel and panel.parent==switcher)
+assert(panel.visibility==4 and panel.enabled,'Decorative stock widget blocked the entire manager input tree')
 assert(panel.Slot.horizontal==2 and panel.Slot.vertical==2)
 assert(M.content:GetChildrenCount()>0 and M.rendering_content==false)
 -- The native switcher can report the outgoing page for several monitor ticks.
