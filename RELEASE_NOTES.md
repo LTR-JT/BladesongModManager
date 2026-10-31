@@ -1,0 +1,1 @@
+Unpublished manager 0.1.0 candidate. Extracted optional UI, dependency planning, installer and ownership support. Framework compatibility and shared Creative UI remain in the runtime repository. Main/Bleeding Edge in-game testing remains pending.

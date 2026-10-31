@@ -1,0 +1,8 @@
+{
+  "version": "3.0.1 Beta 0",
+  "commit": "a1e7f571",
+  "sha256": "a0ccd9631f5c70119c498aeae2c2c83006613a465df15d29a51ce9b3930a572f",
+  "upstream": "https://github.com/UE4SS-RE/RE-UE4SS",
+  "provenance": "Preserved tested Bladesong-configured snapshot; UE4SS.dll matches the working local runtime byte-for-byte; original MIT license included in archive.",
+  "download": "https://raw.githubusercontent.com/LTR-JT/BladesongModFramework/f15dabfba66d16dccae1f210a61bf9c070b2238c/Vendor/UE4SS_Bladesong_Configured.zip"
+}

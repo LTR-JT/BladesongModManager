@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "id": "BladesongModManager",
+  "name": "Bladesong Mod Manager",
+  "author": "LTR-JT and contributors",
+  "version": "0.1.0",
+  "api": "^1.0.0",
+  "dependencies": {
+    "BladesongModFramework": ">=0.1.8 <1.0.0"
+  },
+  "description": "Optional in-game mod installation, dependency planning and update management",
+  "repository": "https://github.com/LTR-JT/BladesongModManager",
+  "release_source": {
+    "type": "github",
+    "repository": "https://github.com/LTR-JT/BladesongModManager",
+    "tag_prefix": "v"
+  },
+  "runtime_components": {
+    "UE4SS": "*"
+  },
+  "package": {
+    "format": "bladesong-mod-1",
+    "target": "ue4ss-mods"
+  },
+  "settings": {
+    "auto_check": {
+      "type": "boolean",
+      "default": true
+    },
+    "registry_url": {
+      "type": "string",
+      "default": "https://raw.githubusercontent.com/LTR-JT/BladesongModFramework/main/mod-index.json"
+    }
+  },
+  "license": "MIT"
+}

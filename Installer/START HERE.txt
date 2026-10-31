@@ -1,0 +1,7 @@
+BLADESONG MOD MANAGER — BOOTSTRAP CANDIDATE
+
+Includes configured UE4SS, BladesongModFramework, and optional BladesongModManager.
+Close Bladesong. Extract All. Open the extracted folder. Run INSTALL.cmd.
+Choose your Steam Bladesong game folder if asked. Start the game and click Mods.
+The installer does not delete saves or PCL libraries. Replaced files are backed up.
+This is an unpublished test package; live validation is still required.

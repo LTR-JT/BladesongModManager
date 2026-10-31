@@ -1,0 +1,10 @@
+{
+  "framework": {
+    "repository": "LTR-JT/BladesongModFramework",
+    "ref": "ac2934ab1d9f327d51997c97fdaafc00147da796"
+  },
+  "sdk": {
+    "repository": "LTR-JT/BladesongSDK",
+    "ref": "03ae65284956c27b233f5e2232433a6ab8506f38"
+  }
+}
