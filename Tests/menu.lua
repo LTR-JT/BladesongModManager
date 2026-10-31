@@ -76,3 +76,14 @@ local legacy=btn('Mods');parent:AddChildToWrapBox(legacy);M.Monitor()
 assert(legacy.visibility==1 and legacy:GetParent()==parent,'Legacy combined-manager button was not safely collapsed')
 assert(M.entry==active_entry and M.entry~=legacy)
 print('PASS: standalone manager supersedes the legacy combined Mods button without destroying its widget')
+local find_before,hook_before=StaticFindObject,RegisterHook
+local available,bind_count=false,0
+StaticFindObject=function(path)
+ if path=='/Script/CommonUI.CommonButtonBase:HandleButtonClicked'then return available and object()or nil end
+ return find_before(path)
+end
+RegisterHook=function()bind_count=bind_count+1 end
+M.click_hook_installed=false;assert(not M.TryBindClickHook()and bind_count==0)
+available=true;assert(M.TryBindClickHook());assert(M.TryBindClickHook()and bind_count==1)
+StaticFindObject,RegisterHook=find_before,hook_before
+print('PASS: standalone manager waits for the native click function and binds once without a framework readiness signal')

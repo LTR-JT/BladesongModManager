@@ -372,6 +372,7 @@ function M.DrainActions()
  end
 end
 function M.Monitor()
+ M.TryBindClickHook()
  M.DrainActions()
  if valid(M.panel)and valid(M.switcher)then
   -- CommonAnimatedSwitcher keeps reporting the outgoing page during its animation.
@@ -442,7 +443,11 @@ function M.Monitor()
 
 end
 
-RegisterHook('/Script/CommonUI.CommonButtonBase:HandleButtonClicked',function(context)
+function M.TryBindClickHook()
+ if M.click_hook_installed then return true end
+ local path='/Script/CommonUI.CommonButtonBase:HandleButtonClicked'
+ local found,fn=pcall(StaticFindObject,path);if not found or not valid(fn)then return false end
+ local ok,why=pcall(RegisterHook,path,function(context)
 
  local b=context:get();if not valid(b)then return end;local a=M.actions[b:GetAddress()]
 
@@ -455,6 +460,11 @@ RegisterHook('/Script/CommonUI.CommonButtonBase:HandleButtonClicked',function(co
  end
 
 end)
+ if ok then M.click_hook_installed=true;return true end
+ if M.hook_error~=tostring(why)then M.hook_error=tostring(why);F.errors[#F.errors+1]=M.hook_error end
+ return false
+end
+M.TryBindClickHook()
 
 return M
 
