@@ -59,6 +59,10 @@ function F.SendPage(id,page)
  if not bridge()then return nil,'Selected mod runtime is not running'end
  F.sequence=(F.sequence or 0)+1;ModRef:SetSharedVariable('BMF1:command:'..id,J.encode({page=page,sequence=F.sequence,time=os.time(),epoch=shared('epoch')}));return true
 end
+function F.LegacyCombinedMenu()
+ local metadata=bridge()and decoded(shared('mod:BladesongModFramework'));local patch=metadata and tostring(metadata.version):match('^0%.1%.(%d+)')
+ return patch and tonumber(patch)<=7 or false
+end
 function F.GetFrameworkStatus()
  if bridge()then local m=decoded(shared('mod:BladesongModFramework'))or{};return 'running '..tostring(m.version or'')end
  return 'not running (not required by manager)'

@@ -24,6 +24,7 @@ local function boot(with_framework)
  end
  assert(native_load(root..'main.lua','t',env))()
  assert(calls.primed and calls.monitored and calls.discovered)
+ assert(services.LegacyCombinedMenu()==with_framework)
  assert(services.GetFrameworkStatus():find(with_framework and 'running'or'not running',1,true))
  local own=J.decode(services._get('mod:BladesongModManager'));assert(own.standalone and not own.dependencies.BladesongModFramework)
 end

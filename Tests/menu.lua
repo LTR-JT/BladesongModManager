@@ -70,8 +70,9 @@ M.Monitor();assert(switcher.active==original[2]and panel2.removed and M.panel==n
 assert(M.actions[M.entry:GetAddress()])
 print('PASS: Close restores native page; native Back/navigation cleans up without overriding destination; entry remains clickable')
 
-M.entry:RemoveFromParent();M.entry=nil;M.entries={}
+F.LegacyCombinedMenu=function()return true end
+local active_entry=M.entry
 local legacy=btn('Mods');parent:AddChildToWrapBox(legacy);M.Monitor()
 assert(legacy.visibility==1 and legacy:GetParent()==parent,'Legacy combined-manager button was not safely collapsed')
-assert(M.entry and M.entry~=legacy)
+assert(M.entry==active_entry and M.entry~=legacy)
 print('PASS: standalone manager supersedes the legacy combined Mods button without destroying its widget')

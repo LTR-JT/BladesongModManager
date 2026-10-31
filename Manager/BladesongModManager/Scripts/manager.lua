@@ -398,22 +398,21 @@ function M.Monitor()
 
  end
 
+ if valid(M.main)and F.LegacyCombinedMenu and F.LegacyCombinedMenu()then
+  local options=M.main.OptionsButton;local parent=valid(options)and options:GetParent()
+  if valid(parent)then for i=0,parent:GetChildrenCount()-1 do
+   local child=parent:GetChildAt(i);local known,is_button=pcall(function()return child:IsA(options:GetClass())end)
+   if child~=M.entry and known and is_button then
+    local ok,caption=pcall(function()return plain(child.Caption)end)
+    if ok and type(caption)=='string'and caption:lower()=='mods'then child:SetVisibility(1)end
+   end
+  end end
+ end
  if valid(M.main)and (not valid(M.entry)or not valid(M.entry:GetParent()))then
 
   local old=M.entries[M.main:GetAddress()];if old and valid(old)and valid(old:GetParent())then M.entry=old;M.actions[old:GetAddress()]={widget=old,callback=M.Open};return end
 
   local options=M.main.OptionsButton
-  -- Legacy combined framework builds also add Mods. Keep their widget alive but
-  -- collapsed so their monitor will not recreate it or receive pointer clicks.
-  local old_parent=options:GetParent()
-  for i=0,old_parent:GetChildrenCount()-1 do
-   local child=old_parent:GetChildAt(i)
-   local known,is_button=pcall(function()return child:IsA(options:GetClass())end)
-   if child~=M.entry and known and is_button then
-    local ok,caption=pcall(function()return plain(child.Caption)end)
-    if ok and type(caption)=='string'and caption:lower()=='mods'then child:SetVisibility(1)end
-   end
-  end
   local parent=options:GetParent()
   assert(valid(parent)and parent:IsA(obj('/Script/UMG.WrapBox')),'Native main-menu WrapBox unavailable')
   local function copy_slot(slot)
