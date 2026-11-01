@@ -29,12 +29,60 @@ class Installer(unittest.TestCase):
   plan=self.root/'plan.json';plan.write_text(json.dumps({'schema_version':1,'approved':True,'id':'test_install','relaunch':False,'items':[{'manifest':str(m),'payload':result['payload']}]}))
   result=self.job('apply',{'plan':str(plan)});self.assertEqual(result['status'],'complete',result)
   installed=self.scripts.parent.parent/'FixtureMod/Scripts/main.lua';self.assertEqual(installed.read_bytes(),b'print("fixture")')
+ def test_pcl_owns_assets_and_incomplete_pcl_release_rejected(self):
+  files={'Scripts/main.lua':b'print("framework")','Scripts/library.lua':b'return {}'}
+  files.update({'assets/logicmods/PCLAnchor.'+ext:b'cooked '+ext.encode() for ext in ['pak','ucas','utoc']})
+  files['assets/logicmods/PCLAnchor/config.lua']=b'Mods["PCLAnchor"]={AssetName="ModActor_C"}'
+  m={'schema_version':1,'id':'PreconstructionLibraryProbe','name':'Framework','version':'0.1.8','api':'^1.0.0','files':[{'path':k,'size':len(v),'sha256':hashlib.sha256(v).hexdigest()}for k,v in files.items()]}
+  archive=self.root/'framework.zip';manifest=self.root/'framework.json'
+  with zipfile.ZipFile(archive,'w')as z:
+   for k,v in files.items():z.writestr(k,v)
+  manifest.write_text(json.dumps(m));validated=self.validate(archive,manifest);self.assertEqual(validated['status'],'complete',validated)
+  mods=self.scripts.parent.parent;(mods/'mods.txt').write_text('Keybinds : 1\n')
+  plan=self.root/'framework-plan.json';plan.write_text(json.dumps({'schema_version':1,'approved':True,'id':'framework_assets','relaunch':False,'items':[{'manifest':str(manifest),'payload':validated['payload']}],'toggles':[{'id':'PreconstructionLibraryProbe','enabled':True,'marker':False,'mods_hash':hashlib.sha256((mods/'mods.txt').read_bytes()).hexdigest()}]}))
+  self.assertEqual(self.job('apply',{'plan':str(plan)})['status'],'complete')
+  self.assertEqual((self.scripts.parents[5]/'Content/Paks/LogicMods/PCLAnchor/config.lua').read_bytes(),files['assets/logicmods/PCLAnchor/config.lua'])
+  self.assertEqual(json.loads((mods/'PreconstructionLibraryProbe/mod.json').read_text())['version'],'0.1.8')
+  self.assertEqual((mods/'mods.txt').read_text().strip().splitlines()[-1],'Keybinds : 1')
+  m['files']=[f for f in m['files']if not f['path'].startswith('assets/')];manifest.write_text(json.dumps(m));result=self.validate(archive,manifest)
+  self.assertEqual(result['status'],'failed');self.assertIn('Incomplete Preconstruction Library release',result['error'])
  def test_portable_logicmods_target_and_reserved_ownership_records(self):
   archive,manifest=self.archive('assets/logicmods/Fixture.pak',b'fixture asset');result=self.validate(archive,manifest);self.assertEqual(result['status'],'complete')
   plan=self.root/'asset-plan.json';plan.write_text(json.dumps({'schema_version':1,'approved':True,'id':'asset_target','relaunch':False,'items':[{'manifest':str(manifest),'payload':result['payload']}]}))
   self.assertEqual(self.job('apply',{'plan':str(plan)})['status'],'complete');self.assertEqual((self.scripts.parents[5]/'Content/Paks/LogicMods/Fixture.pak').read_bytes(),b'fixture asset')
   for name in ['deployment.json','bmf-installed.json']:
    archive,manifest=self.archive(name);self.assertEqual(self.validate(archive,manifest)['status'],'failed')
+ def apply_fixture(self,archive,manifest,token):
+  result=self.validate(archive,manifest);self.assertEqual(result['status'],'complete',result)
+  plan=self.root/(token+'.json');plan.write_text(json.dumps({'schema_version':1,'approved':True,'id':token,'relaunch':False,'items':[{'manifest':str(manifest),'payload':result['payload']}]}))
+  return self.job('apply',{'plan':str(plan)})
+ def test_reinstall_reuses_identical_orphaned_assets(self):
+  archive,manifest=self.archive('assets/logicmods/Fixture.pak',b'matching asset')
+  asset=self.scripts.parents[5]/'Content/Paks/LogicMods/Fixture.pak';asset.parent.mkdir(parents=True);asset.write_bytes(b'matching asset')
+  self.assertEqual(self.apply_fixture(archive,manifest,'orphan_asset')['status'],'complete')
+  self.assertEqual(asset.read_bytes(),b'matching asset')
+ def test_reinstall_preserves_different_or_foreign_assets(self):
+  archive,manifest=self.archive('assets/logicmods/Fixture.pak',b'new asset')
+  asset=self.scripts.parents[5]/'Content/Paks/LogicMods/Fixture.pak';asset.parent.mkdir(parents=True);asset.write_bytes(b'personal asset')
+  self.assertEqual(self.apply_fixture(archive,manifest,'different_asset')['status'],'failed');self.assertEqual(asset.read_bytes(),b'personal asset')
+  asset.write_bytes(b'new asset');other=self.scripts.parent.parent/'OtherMod';other.mkdir()
+  meta=json.loads(manifest.read_text());meta['id']='OtherMod';(other/'mod.json').write_text(json.dumps(meta));(other/'bmf-installed.json').write_text(json.dumps(meta))
+  self.assertEqual(self.apply_fixture(archive,manifest,'foreign_asset')['status'],'failed');self.assertEqual(asset.read_bytes(),b'new asset')
+ def test_library_survives_uninstall_and_reinstall(self):
+  archive,manifest=self.archive();self.assertEqual(self.apply_fixture(archive,manifest,'first_install')['status'],'complete')
+  mod=self.scripts.parent.parent/'FixtureMod';personal={'Scripts/preconstructions/library.index':b'my parts','Scripts/preconstructions/blades/library.index':b'my blades','Scripts/preconstructions/preview.png':b'preview','Data/settings.json':b'{"choice":true}'}
+  for rel,value in personal.items():p=mod/rel;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(value)
+  result=self.job('uninstall',{'id':'FixtureMod'});self.assertEqual(result['status'],'waiting_for_exit',result)
+  complete=self.scripts.parent/'Data/last-apply.json';self.wait_for(complete.exists);self.assertEqual(json.loads(complete.read_text())['status'],'complete');self.assertFalse(mod.exists())
+  saved=self.scripts.parents[3]/'BMF_UserData/FixtureMod'
+  for rel,value in personal.items():self.assertEqual((saved/rel).read_bytes(),value)
+  self.assertEqual(self.apply_fixture(archive,manifest,'reinstall_data')['status'],'complete')
+  for rel,value in personal.items():self.assertEqual((mod/rel).read_bytes(),value)
+ def test_legacy_uninstall_archive_recovers_library(self):
+  archive,manifest=self.archive();legacy=self.scripts.parents[3]/'BMF_Uninstalled/012345abcdef';legacy.mkdir(parents=True)
+  (legacy/'bmf-installed.json').write_bytes(manifest.read_bytes());index=legacy/'Scripts/preconstructions/library.index';index.parent.mkdir(parents=True);index.write_text('legacy library')
+  self.assertEqual(self.apply_fixture(archive,manifest,'legacy_restore')['status'],'complete')
+  self.assertEqual((self.scripts.parent.parent/'FixtureMod/Scripts/preconstructions/library.index').read_text(),'legacy library');self.assertEqual(index.read_text(),'legacy library')
  def test_manual_dependency_manifest_and_disabled_state(self):
   _,manifest=self.archive();metadata=json.loads(manifest.read_text());metadata['dependencies']={'BladesongModFramework':'^0.1.4'};manifest.write_text(json.dumps(metadata))
   folder=self.scripts.parent.parent/'BladesongModFramework';folder.mkdir();current={'schema_version':1,'id':'BladesongModFramework','name':'Framework','version':'0.1.5','api':'^1.0.0'}

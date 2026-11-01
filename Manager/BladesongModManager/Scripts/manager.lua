@@ -79,6 +79,7 @@ function M.UpdateStatus(mod)
  if not check then return 'Updates not checked yet'end
  if check.state=='checking'then return 'Checking...'end
  if check.state=='current'then return '✓ Up to date'end
+ if check.state=='unpublished'then return 'No published releases yet'end
  if check.state=='update'then return 'Update available: '..tostring(check.version or '')end
  if check.state=='pinned'then return 'Version pinned'end
  if check.state=='failed'then return 'Check failed: '..tostring(check.message or 'Try again')end
@@ -162,15 +163,21 @@ function M.Render()
  local function line(s,target,size)add(target or M.content,label(M.panel,s,size or 26))end
 
  local function action(c,f,target)
-  local holder=new(M.panel,'SizeBox');holder:SetWidthOverride(420);holder:SetContent(button(M.panel,c,f));local slot=add(target or M.content,holder);slot:SetHorizontalAlignment(1);return holder
+  local holder=new(M.panel,'SizeBox');holder:SetWidthOverride(640);local control=button(M.panel,c,f);control:SetMinDimensions(640,64);holder:SetContent(control);local slot=add(target or M.content,holder);slot:SetHorizontalAlignment(1);return holder
  end
 
- if M.install_plan then
-  line('INSTALLATION PLAN',nil,28)
-  for _,item in ipairs(M.install_plan.items or {})do line(item.action..' — '..item.name..' '..item.version,nil,23)end
-  action('Confirm installation & restart',function()local token=M.install_plan.token;M.install_plan=nil;M.quit_after_job=true;M.Job('install',{token=token})end)
-  action('Cancel installation',function()M.install_plan=nil;M.Render()end)
-  line('Shared dependencies are installed once. SDK capabilities are checked by their runtime after launch.',nil,22)
+ local plan_rendered=false
+ local function card()
+  local frame=new(M.panel,'Border');frame:SetBrushColor({R=.20,G=.19,B=.13,A=1});frame:SetPadding({Left=2,Top=2,Right=2,Bottom=2});add(M.content,frame)
+  local inside=new(M.panel,'Border');inside:SetBrushColor({R=.008,G=.008,B=.006,A=.97});inside:SetPadding({Left=22,Top=18,Right=22,Bottom=18});frame:SetContent(inside)
+  local body=new(M.panel,'VerticalBox');inside:SetContent(body);return body
+ end
+ local function plan(target)
+  if not M.install_plan or plan_rendered then return end;plan_rendered=true
+  line('INSTALLATION PLAN',target,28)
+  for _,item in ipairs(M.install_plan.items or {})do line(item.action..' — '..item.name..' '..item.version,target,23)end
+  action('Confirm & restart',function()local token=M.install_plan.token;M.install_plan=nil;M.quit_after_job=true;M.Job('install',{token=token})end,target)
+  action('Cancel installation',function()M.install_plan=nil;M.Render()end,target)
  end
  if M.adoption then
   line(M.adoption.message,nil,23)
@@ -205,10 +212,11 @@ function M.Render()
    for _,update in ipairs(M.updates or {})do if update.id==mod.id then
     action('Update to '..update.version,function()M.Install(update.source or mod.repository,mod.id)end,body)
    end end
+   if M.plan_origin and M.plan_origin.id==mod.id then plan(body)end
    if mod.id~='BladesongModFramework'then
     action((mod.enabled==false and 'Enable'or 'Disable')..' on next launch',function()M.Job('toggle',{id=mod.id,enabled=mod.enabled==false})end,body)
     action('Uninstall',function()M.quit_after_job=true;M.Job('uninstall',{id=mod.id})end,body)
-    line('Uninstall restarts Bladesong. Mod files and library data are kept in BMF_Uninstalled.',body,21)
+    line('Uninstall restarts Bladesong. Your library is preserved and restored when you reinstall.',body,21)
    end
   end
   for _,mod in ipairs(community)do render_mod(mod)end
@@ -225,15 +233,18 @@ function M.Render()
   line('Install from URL',nil,26)
   local field;M.url,field=url_field(M.panel);add(M.content,field)
   action('Install from URL',function()M.Install(plain(M.url:GetText()))end)
+  if M.plan_origin and not M.plan_origin.id then plan(M.content)end
   action('Refresh catalogue',function()M.RefreshCatalogue(M.default_index,true)end)
   if M.catalogue_loading then line('Refreshing in the background...',nil,23)elseif M.catalogue_message then line(M.catalogue_message,nil,23)end
   for _,entry in ipairs(M.browser or {})do
-   line(entry.manifest and entry.manifest.name or entry.name,nil,30)
-   if entry.manifest then line(entry.manifest.description or '',nil,24);line('Repository version '..entry.manifest.version..(entry.cached and ' (cached)'or ''),nil,23)end
-   if catalogue.installed(entry,installed_mods)then line('✓ Installed',nil,26)
+   local body=card()
+   line(entry.manifest and entry.manifest.name or entry.name,body,30)
+   if entry.manifest then line(entry.manifest.description or '',body,24);line('Repository version '..entry.manifest.version..(entry.cached and ' (cached)'or ''),body,23)end
+   if catalogue.installed(entry,installed_mods)then line('✓ Installed',body,26)
    elseif entry.manifest or entry.status=='discoverable'then
-    action('Install',function()M.Install(entry.repository,entry.manifest and entry.manifest.id)end)
-   else line('Repository unavailable: '..(entry.error or ''),nil,23)end
+    if M.install_plan and M.plan_origin and M.plan_origin.url==entry.repository then plan(body)
+    else action('Install',function()M.Install(entry.repository,entry.manifest and entry.manifest.id)end,body)end
+   else line('Repository unavailable: '..(entry.error or ''),body,23)end
   end
  elseif M.page=='settings'then
 
@@ -261,6 +272,7 @@ function M.Render()
 
  end
 
+ if M.install_plan and not plan_rendered then plan(card())end
  if M.message then line(M.message)end
  if M.staged then
   action('Restart & Apply',function()M.restart_review=not M.restart_review;M.Render()end)
@@ -276,7 +288,7 @@ end
 
 function M.Install(url,id)
  if M.busy then return end
- M.install_plan=nil;M.Job('plan-install',{url=url,expected_id=id or ''})
+ M.plan_origin={url=url,id=id,page=M.page};M.install_plan=nil;M.Job('plan-install',{url=url,expected_id=id or ''})
 end
 function M.Job(operation,args)
 

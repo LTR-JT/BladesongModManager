@@ -1,5 +1,7 @@
-name: Publish repository component (manual only)
+name: Publish reviewed Mod Manager release
 on:
+  push:
+    paths: ['.github/release-plan.json']
   workflow_dispatch:
     inputs:
       tag:
@@ -25,6 +27,26 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Read explicit release approval
+        id: release
+        shell: pwsh
+        env:
+          MANUAL_TAG: ${{ inputs.tag }}
+          MANUAL_DRAFT: ${{ inputs.draft }}
+        run: |
+          $meta = Get-Content mod.json -Raw | ConvertFrom-Json
+          if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') {
+            $tag = $env:MANUAL_TAG
+            $draft = $env:MANUAL_DRAFT
+          } else {
+            $plan = Get-Content .github/release-plan.json -Raw | ConvertFrom-Json
+            if ($plan.publish -ne $true -or $plan.version -ne $meta.version) { throw 'Reviewed release plan required' }
+            $tag = 'v' + $plan.version
+            $draft = 'false'
+          }
+          if ($tag -ne ('v' + $meta.version)) { throw 'Tag must match repository version' }
+          'tag=' + $tag >> $env:GITHUB_OUTPUT
+          'draft=' + $draft >> $env:GITHUB_OUTPUT
       - name: Read reviewed build dependencies
         id: deps
         shell: pwsh
@@ -45,8 +67,8 @@ jobs:
       - name: Publish only this repository's checked artifacts
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.tag }}
-          RELEASE_DRAFT: ${{ inputs.draft }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_DRAFT: ${{ steps.release.outputs.draft }}
         shell: pwsh
         run: |
           $assets = @(python Tools/release_component.py $env:RELEASE_TAG)

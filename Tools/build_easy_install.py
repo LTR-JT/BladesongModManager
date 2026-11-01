@@ -12,7 +12,7 @@ if not runtime.exists():
  runtime.write_bytes(data)
 assert hashlib.sha256(runtime.read_bytes()).hexdigest()==pin['sha256'],'UE4SS snapshot hash mismatch'
 version=json.loads((ROOT/'Manager/BladesongModManager/mod.json').read_text())['version']
-manager=OUT/f'BladesongModManager_{version}_Bootstrap.zip';assert manager.exists(),'Build framework release first'
+manager=OUT/f'BladesongModManager_{version}_Bootstrap.zip';assert manager.exists(),'Build manager runtime and bootstrap first'
 files={}
 with zipfile.ZipFile(runtime)as z:
  for name in z.namelist():
@@ -43,6 +43,6 @@ bundle=OUT/f'BladesongModManager_{version}_Easy_Install_With_UE4SS.zip'
 with zipfile.ZipFile(bundle,'w',zipfile.ZIP_DEFLATED,compresslevel=9)as z:
  for name,data in sorted(files.items()):z.writestr(name,data)
 with zipfile.ZipFile(bundle)as z:assert z.testzip()is None
-archives=sorted(OUT.glob('*.zip'))
+archives=sorted(OUT.glob('BladesongModManager_'+version+'_*.zip'))
 (OUT/'SHA256SUMS.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n'for p in archives),encoding='utf-8')
 print('Easy-install bundle:',bundle,'files:',len(files),'installer command:',len(command))

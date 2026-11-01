@@ -36,6 +36,7 @@ local function obj(kind,name)
  function w:GetVisibility()return self.visibility end
  function w:GetIsEnabled()return self.enabled end
  for _,method in ipairs({'SetForegroundColor','SetStyle','SetMinDimensions','SetToolTipText','SetFont','SetAutoWrapText','SetColorAndOpacity','SetWidthOverride','SetMaxDesiredWidth','SetHeightOverride','SetBrushColor','SetPadding'})do w[method]=function()end end
+ function w:SetMinDimensions(width,height)self.min_width=width;self.min_height=height end
  function w:AddToViewport()error('Must use native menu switcher, not a viewport overlay')end
  return w
 end

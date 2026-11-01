@@ -1,5 +1,20 @@
-Unpublished standalone manager 0.1.3 candidate
+Bladesong Mod Manager 0.1.7
 
-Explicitly enable input on the stock manager page container and set SelfHitTestInvisible so its child controls remain clickable. Decorative stock-widget defaults no longer suppress the whole manager input tree. Added a regression with inherited disabled/hit-test-invisible defaults and diagnostic logging of those inherited values.
+Standalone in-game mod manager. Requires UE4SS; no framework dependency.
 
-The manager requires UE4SS only. The optional framework remains responsible for shared Creative UI and SDK game compatibility. Previous native-proxy button visibility fix is retained. Live in-game verification is pending; no release is authorized.
+- Browse, install, update, enable, disable and uninstall community mods.
+- Preserve Parts/Blades libraries, preview images and settings when uninstalling; restore them on reinstall.
+- Recover library data from older uninstall archives when no separate preserved copy exists.
+- Reuse identical, unclaimed shared assets when reinstalling PCL. Different files and files owned by another mod remain protected.
+- Show per-mod update progress and status. A repository without releases shows "No published releases yet".
+- Use separated mod cards, inline installation review and readable confirmation buttons.
+- Background downloads run without command windows. The main-menu Mods button uses the native menu page and supports mouse input.
+
+Installation
+
+First-time install: download Easy_Install_With_UE4SS.zip, extract it, close Bladesong, and run INSTALL.cmd. Follow START HERE.txt.
+
+Already have UE4SS: download Runtime.zip, copy its Bladesong folder into your Steam Bladesong game folder, and enable BladesongModManager in ue4ss/Mods/mods.txt.
+
+The manager does not bundle the framework or PCL. Install them through Browse when needed.
+Library data is retained in BMF_UserData; original uninstalled folders are also retained in BMF_Uninstalled. Keep these folders if they contain your only library backup.

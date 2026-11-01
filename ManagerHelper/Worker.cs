@@ -51,13 +51,17 @@ partial class Worker {
   string listing=Path.Combine(work,"component-releases.json");Fetch("https://api.github.com/repos"+uri.AbsolutePath.TrimEnd('/')+"/releases?per_page=20",listing,1048576);
   return Resolve(SelectComponentRelease(metadata,Read(listing)),work);
  }
+ sealed class NoPublishedReleaseException:Exception{public NoPublishedReleaseException():base("No published releases yet"){} }
  static string SelectComponentRelease(object metadata,object releases){
   object source=G(metadata,"release_source");string prefix=S(source,"tag_prefix");
+  bool matchingRelease=false;
   foreach(object release in A(releases)){
    if(Convert.ToBoolean(G(release,"draft",false))||!S(release,"tag_name").StartsWith(prefix,StringComparison.Ordinal)||Convert.ToBoolean(G(release,"prerelease",false))&&S(metadata,"channel")!="prerelease")continue;
+   matchingRelease=true;
    var asset=A(G(release,"assets")).FirstOrDefault(x=>S(x,"name")==ManifestAsset(metadata));if(asset!=null)return S(asset,"browser_download_url");
   }
-  throw new Exception("No compatible component release in the newest 20 releases");
+  if(!matchingRelease)throw new NoPublishedReleaseException();
+  throw new Exception("Published releases are missing the required manifest asset: "+ManifestAsset(metadata));
  }
  static string ManifestAsset(object m){object source=G(m,"release_source");return source==null?"mod.json":S(source,"manifest_asset","mod.json");}
  static bool Standalone(object m){return G(m,"standalone")is bool&&(bool)G(m,"standalone");}
@@ -77,12 +81,13 @@ partial class Worker {
   var files=A(G(m,"files")).ToList();Need(files.Count>0&&files.Count<=4096,"File count limit");var seen=new HashSet<string>(StringComparer.OrdinalIgnoreCase);long total=0;
   foreach(var f in files){string p=S(f,"path");Need(p!="deployment.json"&&p!="bmf-installed.json"&&p!="mod.json"&&p!="bmf-manifest.json","Reserved installation record");Child(Data,p);Need(seen.Add(p),"Duplicate file path");Need(!Regex.IsMatch(p,@"(^|/)(SaveGames|preconstructions|blades|Data)(/|$)|\.(sav|dmp|log)$",RegexOptions.IgnoreCase),"Personal data path rejected");Need(Regex.IsMatch(S(f,"sha256"),@"^[a-fA-F0-9]{64}$"),"Invalid SHA256");long size=Convert.ToInt64(G(f,"size"));Need(size>=0&&size<=67108864,"File size limit");total+=size;}
   Need(total<=268435456,"Extraction limit");
+  if(S(m,"id")=="PreconstructionLibraryProbe")foreach(string required in new[]{"assets/logicmods/PCLAnchor.pak","assets/logicmods/PCLAnchor.ucas","assets/logicmods/PCLAnchor.utoc","assets/logicmods/PCLAnchor/config.lua"})Need(seen.Contains(required),"Incomplete Preconstruction Library release: missing "+required+". Install a complete runtime release.");
  }
  static Uri Https(string value){Uri u;Need(Uri.TryCreate(value,UriKind.Absolute,out u)&&u.Scheme=="https"&&u.UserInfo==""&&u.Fragment==""&&u.Port==443,"HTTPS URL required (no credentials, fragment or custom port)");return u;}
  static void Fetch(string url,string path,long limit=67108864,int timeout=30000){
   Uri u=Https(url);ServicePointManager.SecurityProtocol=SecurityProtocolType.Tls12;
   for(int hop=0;hop<6;hop++){
-   var r=(HttpWebRequest)WebRequest.Create(u);r.AllowAutoRedirect=false;r.UserAgent="BladesongModManager/0.1.3";r.Timeout=timeout;r.ReadWriteTimeout=timeout;
+   var r=(HttpWebRequest)WebRequest.Create(u);r.AllowAutoRedirect=false;r.UserAgent="BladesongModManager/0.1.7";r.Timeout=timeout;r.ReadWriteTimeout=timeout;
    string rate=Path.Combine(Data,"rate-"+TextHash(u.Host)+".json");lock(NetworkSync){if(File.Exists(rate)){DateTime until;if(DateTime.TryParse(S(Read(rate),"until"),out until)&&until.ToUniversalTime()>DateTime.UtcNow)throw new Exception("Provider rate limit cooldown; using cached metadata where available");}}
    HttpWebResponse received;try{received=(HttpWebResponse)r.GetResponse();}catch(WebException e){var failed=e.Response as HttpWebResponse;if(failed!=null){using(failed){if((int)failed.StatusCode==429||((int)failed.StatusCode==403&&(failed.Headers["X-RateLimit-Remaining"]=="0"||failed.Headers["Retry-After"]!=null))){int seconds;long reset;DateTime until=DateTime.UtcNow.AddMinutes(15);if(Int32.TryParse(failed.Headers["Retry-After"],out seconds))until=DateTime.UtcNow.AddSeconds(Math.Min(86400,Math.Max(1,seconds)));else if(Int64.TryParse(failed.Headers["X-RateLimit-Reset"],out reset))until=new DateTime(1970,1,1,0,0,0,DateTimeKind.Utc).AddSeconds(reset);lock(NetworkSync)Write(rate,Obj("until",until.ToString("o")));throw new Exception("Provider rate limit reached; cached metadata remains available");}}}throw;}
    using(var response=received){
@@ -186,14 +191,52 @@ partial class Worker {
    Need(Enabled(dependency.Key),"Disabled dependency "+dependency.Key);
   }
  }
+ // Unclaimed shared files may be reused only when byte-identical to this release.
+ static bool ReusableShared(object manifest,object file,string destination){
+  string rel=S(file,"path");if(!rel.StartsWith("assets/logicmods/")&&!(S(manifest,"id")=="BladesongModFramework"&&rel.StartsWith("shared/")))return false;
+  if(Hash(destination)!=S(file,"sha256").ToLowerInvariant())return false;
+  foreach(string path in Records()){
+   object other=Read(path);if(S(other,"id")==S(manifest,"id"))continue;
+   string receipt=Child(ModsRoot,S(other,"id")+"/bmf-installed.json");if(File.Exists(receipt))other=Read(receipt);
+   foreach(object owned in A(G(other,"files")))if(String.Equals(Target(other,S(owned,"path")),destination,StringComparison.OrdinalIgnoreCase))return false;
+  }return true;
+ }
+ static IEnumerable<string> UserDataFiles(string root,bool includeData){
+  int count=0;foreach(string rel in (includeData?new[]{"Data","Scripts/preconstructions","Scripts/blades"}:new[]{"Scripts/preconstructions","Scripts/blades"})){
+   string start=Child(root,rel);if(!Directory.Exists(start))continue;var pending=new Stack<string>();pending.Push(start);
+   while(pending.Count>0)foreach(string path in Directory.EnumerateFileSystemEntries(pending.Pop())){
+    Need(++count<=50000,"User data entry limit");Need((File.GetAttributes(path)&FileAttributes.ReparsePoint)==0,"User data link rejected");
+    if(Directory.Exists(path))pending.Push(path);else yield return path.Substring(root.TrimEnd('\\').Length+1).Replace('\\','/');
+   }
+  }
+ }
+ static string UserDataRoot(string id){return Child(Path.Combine(Path.GetDirectoryName(GameExe()),"BMF_UserData"),id);}
+ static string RestoreSource(string id){
+  string saved=UserDataRoot(id);if(Directory.Exists(saved))return saved;
+  string archives=Path.Combine(Path.GetDirectoryName(GameExe()),"BMF_Uninstalled");if(!Directory.Exists(archives))return null;
+  foreach(string folder in Directory.GetDirectories(archives).OrderByDescending(Directory.GetCreationTimeUtc).Take(10000)){
+   Need((File.GetAttributes(folder)&FileAttributes.ReparsePoint)==0,"Uninstall archive link rejected");
+   foreach(string name in new[]{"bmf-installed.json","mod.json","bmf-manifest.json"}){
+    string path=Child(folder,name);if(!File.Exists(path))continue;object receipt=Read(path);if(S(receipt,"id")==id)return folder;
+   }
+  }return null;
+ }
+ static void DataCopies(string source,string destination,bool missingOnly,List<object> changes,string transaction){
+  foreach(string relative in UserDataFiles(source,Path.GetFileName(destination)!="BladesongModManager")){
+   string input=Child(source,relative),target=Child(destination,relative);if(missingOnly&&File.Exists(target))continue;
+   string backup=null;if(File.Exists(target)){backup=Path.Combine(transaction,"userdata_"+changes.Count+".bak");File.Copy(target,backup,false);}
+   changes.Add(Obj("destination",target,"source",input,"backup",backup,"sha256",Hash(input)));
+  }
+ }
  static void CheckTargets(object manifest){
   Ownable(S(manifest,"id"));
   string record=Child(ModsRoot,S(manifest,"id")+"/bmf-installed.json");object previous=File.Exists(record)?Read(record):null;
   foreach(var file in A(G(manifest,"files"))){
    string destination=Target(manifest,S(file,"path"));if(!File.Exists(destination))continue;
-   Need(previous!=null,"Unmanaged installation exists; manual migration required");
+   if(previous==null&&ReusableShared(manifest,file,destination))continue;
+   Need(previous!=null,"Unmanaged installation exists; manual migration required: "+S(file,"path"));
    var owned=A(G(previous,"files")).FirstOrDefault(x=>S(x,"path")==S(file,"path"));
-   Need(owned!=null&&Hash(destination)==S(owned,"sha256").ToLowerInvariant(),"Local edits preserved; refusing overwrite");
+   Need((owned==null&&ReusableShared(manifest,file,destination))||(owned!=null&&Hash(destination)==S(owned,"sha256").ToLowerInvariant()),"Local edits preserved; refusing overwrite: "+S(file,"path"));
   }
  }
  static Dictionary<string,object> PendingPlan(string work){
@@ -254,7 +297,7 @@ partial class Worker {
  static string Target(object m,string rel){
   string id=S(m,"id");if(id=="BladesongModFramework"&&rel.StartsWith("shared/"))return Child(Path.Combine(ModsRoot,"shared/BladesongFramework"),rel.Substring(7));
   if(rel.StartsWith("assets/logicmods/")){
-   string name=rel.Substring(17);Need(Regex.IsMatch(name,@"^[A-Za-z0-9_.-]+\.(pak|ucas|utoc)$"),"Unsupported LogicMods asset");
+   string name=rel.Substring(17);Need(Regex.IsMatch(name,@"^[A-Za-z0-9_.-]+\.(pak|ucas|utoc)$")||(id=="PreconstructionLibraryProbe"&&name=="PCLAnchor/config.lua"),"Unsupported LogicMods asset");
    string inner=Directory.GetParent(Directory.GetParent(Path.GetDirectoryName(GameExe())).FullName).FullName;
    return Child(Path.Combine(inner,"Content/Paks/LogicMods"),name);
   }
@@ -279,10 +322,12 @@ partial class Worker {
    // Prepare every backup before the first write, including installation records.
    foreach(var item in A(G(plan,"items"))){object m=Read(S(item,"manifest"));Manifest(m);Ownable(S(m,"id"));string install=Child(ModsRoot,S(m,"id"));string record=Path.Combine(install,"bmf-installed.json");object old=File.Exists(record)?Read(record):null;
     foreach(var f in A(G(m,"files"))){string source=Child(S(item,"payload"),S(f,"path")),dest=Target(m,S(f,"path"));Need(Hash(source)==S(f,"sha256").ToLowerInvariant(),"Staged file changed");string backup=null;
-     if(File.Exists(dest)){Need(old!=null,"Unmanaged installation exists; manual migration required");var owned=A(G(old,"files")).FirstOrDefault(x=>S(x,"path")==S(f,"path"));Need(owned!=null&&Hash(dest)==S(owned,"sha256").ToLowerInvariant(),"Local edits preserved; refusing overwrite");backup=Child(transaction,"file_"+changes.Count+".bak");Directory.CreateDirectory(Path.GetDirectoryName(backup));File.Copy(dest,backup,false);Need(Hash(dest)==Hash(backup),"Backup mismatch");}
+     if(File.Exists(dest)){if(old==null)Need(ReusableShared(m,f,dest),"Unmanaged installation exists; manual migration required: "+S(f,"path"));else{var owned=A(G(old,"files")).FirstOrDefault(x=>S(x,"path")==S(f,"path"));Need((owned==null&&ReusableShared(m,f,dest))||(owned!=null&&Hash(dest)==S(owned,"sha256").ToLowerInvariant()),"Local edits preserved; refusing overwrite: "+S(f,"path"));}backup=Child(transaction,"file_"+changes.Count+".bak");Directory.CreateDirectory(Path.GetDirectoryName(backup));File.Copy(dest,backup,false);Need(Hash(dest)==Hash(backup),"Backup mismatch");}
      changes.Add(Obj("destination",dest,"backup",backup,"source",source,"sha256",S(f,"sha256").ToLowerInvariant()));
     }
+    if(old==null){string saved=RestoreSource(S(m,"id"));if(saved!=null)DataCopies(saved,install,true,changes,transaction);}
     string recordSource=Path.Combine(transaction,"record_"+changes.Count+".json");Write(recordSource,m);string recordBackup=null;if(File.Exists(record)){recordBackup=recordSource+".bak";File.Copy(record,recordBackup,false);}changes.Add(Obj("destination",record,"backup",recordBackup,"source",recordSource,"sha256",Hash(recordSource)));
+    string metadata=Child(install,"mod.json"),metadataBackup=null;if(File.Exists(metadata)){metadataBackup=recordSource+".metadata.bak";File.Copy(metadata,metadataBackup,false);}changes.Add(Obj("destination",metadata,"backup",metadataBackup,"source",recordSource,"sha256",Hash(recordSource)));
     string deployment=Child(install,"deployment.json"),deploymentNew=Path.Combine(transaction,"owner_"+changes.Count+".json"),deploymentBackup=null;
     Write(deploymentNew,Obj("schema_version",1,"owner",OwnerID,"mod_id",S(m,"id")));
     if(File.Exists(deployment)){deploymentBackup=deploymentNew+".bak";File.Copy(deployment,deploymentBackup,false);}
@@ -290,7 +335,7 @@ partial class Worker {
 
    }
    var removals=A(G(plan,"removals")).ToList();
-   foreach(var removal in removals){string id=S(removal,"id"),source=RemovalTarget(id),archive=UninstallArchive(removal);Need(!Directory.Exists(archive),"Uninstall archive already exists");changes.Add(Obj("destination",archive,"move_directory",source));}
+   foreach(var removal in removals){string id=S(removal,"id"),source=RemovalTarget(id),archive=UninstallArchive(removal);Need(!Directory.Exists(archive),"Uninstall archive already exists");DataCopies(source,UserDataRoot(id),false,changes,transaction);changes.Add(Obj("destination",archive,"move_directory",source));}
    var toggles=A(G(plan,"toggles")).ToList();
    if(toggles.Count>0||removals.Count>0){
     string mods=Path.Combine(ModsRoot,"mods.txt"),originalText=File.Exists(mods)?File.ReadAllText(mods):"";string edited=originalText;
@@ -305,6 +350,7 @@ partial class Worker {
      string marker=Child(ModsRoot,id+"/enabled.txt");Need(File.Exists(marker)==Convert.ToBoolean(G(toggle,"marker")),"Enable marker changed");
      if(File.Exists(marker)&&!Convert.ToBoolean(G(toggle,"enabled"))){string backup=Path.Combine(transaction,id+".enabled.bak");File.Copy(marker,backup,false);changes.Add(Obj("destination",marker,"backup",backup,"delete",true));}
     }
+    var keybind=Regex.Match(edited,@"(?m)^Keybinds[ \t]*:[ \t]*[01][ \t]*\r?$");if(keybind.Success){edited=Regex.Replace(edited,@"(?m)^Keybinds[ \t]*:[ \t]*[01][ \t]*\r?$","").TrimEnd()+"\r\n"+keybind.Value.Trim()+"\r\n";}
     string source=Path.Combine(transaction,"mods.new.txt");File.WriteAllText(source,edited,new UTF8Encoding(false));string old=null;if(File.Exists(mods)){old=Path.Combine(transaction,"mods.bak.txt");File.Copy(mods,old,false);}changes.Add(Obj("destination",mods,"backup",old,"source",source,"sha256",Hash(source)));
    }
    Write(Path.Combine(transaction,"journal.json"),Obj("status","prepared","changes",changes));var done=new List<object>();
@@ -331,7 +377,8 @@ partial class Worker {
       lock(sync)updates.Add(metadata);check=Obj("state","update","version",S(metadata,"version"));
      }else check=Obj("state","current");
     }
-   }catch(Exception error){check=Obj("state","failed","message",error.Message);}
+   }catch(NoPublishedReleaseException){check=Obj("state","unpublished","message","No published releases yet");}
+   catch(Exception error){check=Obj("state","failed","message",error.Message);}
    lock(sync){checks[id]=check;publish();}
   });
   return Obj("status","complete","checks",checks,"updates",updates.ToArray(),"message","Update check complete.");
@@ -339,7 +386,7 @@ partial class Worker {
  static object Run(object request,string work){
   object args=G(request,"args",Obj());switch(S(request,"operation")){
    case "browse":return Browse(args,work);
-   case "select-component-release-local":return Obj("status","complete","url",SelectComponentRelease(Read(S(args,"manifest")),Read(S(args,"releases"))));
+   case "select-component-release-local":try{return Obj("status","complete","url",SelectComponentRelease(Read(S(args,"manifest")),Read(S(args,"releases"))));}catch(NoPublishedReleaseException){return Obj("status","complete","state","unpublished");}
    case "validate-dependencies-local":Dependencies(Read(S(args,"path")));return Obj("status","complete");
    case "validate-index-local":Index(Read(S(args,"path")));return Obj("status","complete");
    case "compatibility-local":return Obj("status","complete","compatibility",Compatibility(Read(S(args,"path")),request));

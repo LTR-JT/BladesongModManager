@@ -30,6 +30,14 @@ class Dependencies(Installer):
   meta=self.metadata('BladesongModManager');m=json.loads(meta.read_text());m['release_source']={'type':'github','repository':'https://github.com/LTR-JT/BladesongModFramework','tag_prefix':'manager-v','manifest_asset':'BladesongModManager.mod.json'};meta.write_text(json.dumps(m))
   releases=self.root/'releases.json';releases.write_text(json.dumps([{'tag_name':'v0.1.9','assets':[{'name':'mod.json','browser_download_url':'https://example.org/framework.json'}]},{'tag_name':'manager-v0.1.1','assets':[{'name':'BladesongModManager.mod.json','browser_download_url':'https://example.org/manager.json'}]}]))
   result=self.job('select-component-release-local',{'manifest':str(meta),'releases':str(releases)});self.assertEqual(result['url'],'https://example.org/manager.json')
+ def test_unpublished_component_is_not_a_failed_update_check(self):
+  meta=self.metadata('BladesongModManager');m=json.loads(meta.read_text());m['release_source']={'type':'github','repository':'https://github.com/LTR-JT/BladesongModManager','tag_prefix':'v'};meta.write_text(json.dumps(m))
+  releases=self.root/'unpublished-releases.json'
+  for listing in [[],[{'tag_name':'v0.1.0','draft':True,'assets':[]}],[{'tag_name':'v0.1.0','prerelease':True,'assets':[]}],[{'tag_name':'other-v1.0.0','assets':[]}]]:
+   releases.write_text(json.dumps(listing));result=self.job('select-component-release-local',{'manifest':str(meta),'releases':str(releases)})
+   self.assertEqual(result['status'],'complete',result);self.assertEqual(result['state'],'unpublished')
+  releases.write_text(json.dumps([{'tag_name':'v0.1.0','assets':[]}]))
+  result=self.job('select-component-release-local',{'manifest':str(meta),'releases':str(releases)});self.assertEqual(result['status'],'failed');self.assertIn('manifest asset',result['error'])
  def test_standalone_plan_needs_no_framework_but_sdk_mod_resolves_it(self):
   root=self.metadata('StandaloneTool');m=json.loads(root.read_text());m.pop('api');m['standalone']=True;root.write_text(json.dumps(m));result=self.graph(root,{})
   self.assertEqual(result['status'],'complete',result);self.assertEqual([x['id']for x in result['plan']['items']],['StandaloneTool'])
