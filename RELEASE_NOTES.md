@@ -1,4 +1,4 @@
-## 0.1.9 candidate
+## 0.1.9
 
 - Independent startup updater checks and downloads the official standalone manager before its UI initializes, even when the menu module fails.
 - Updates apply after normal game exit, without forced closure, restart, console windows or new Steam launch settings.
