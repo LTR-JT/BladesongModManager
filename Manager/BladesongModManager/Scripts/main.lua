@@ -1,5 +1,9 @@
 -- Standalone UE4SS entry point. Framework is only a dependency of selected SDK mods.
 local scripts=assert(debug.getinfo(1,'S').source:gsub('^@',''):match('^(.*[\\/])'))
+-- Keep the startup updater alive even if a game update breaks the menu module.
+local startup_ok,startup_error=pcall(function()return assert(loadfile(scripts..'startup.lua'))(scripts)end)
+if not startup_ok then print('[BMM Startup] '..tostring(startup_error)..'\n')end
+local ui_ok,ui_error=pcall(function()
 local services=assert(loadfile(scripts..'services.lua'))(scripts)
 local client=assert(loadfile(scripts..'worker_client.lua'))(scripts,services)
 services.StartJob=client.StartJob
@@ -22,3 +26,6 @@ local function tick()
  ExecuteInGameThreadWithDelay(500,tick)
 end
 tick()
+
+end)
+if not ui_ok then print('[BMM] Menu failed to initialize; startup updater remains independent: '..tostring(ui_error)..'\n')end

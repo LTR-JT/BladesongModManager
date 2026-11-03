@@ -1,3 +1,10 @@
+## 0.1.9 candidate
+
+- Independent startup updater checks and downloads the official standalone manager before its UI initializes, even when the menu module fails.
+- Updates apply after normal game exit, without forced closure, restart, console windows or new Steam launch settings.
+- Automatic manager updates are enabled by default and can be disabled in Settings.
+- Existing changes, local edits, libraries and external ownership remain protected.
+
 Bladesong Mod Manager 0.1.7
 
 Standalone in-game mod manager. Requires UE4SS; no framework dependency.

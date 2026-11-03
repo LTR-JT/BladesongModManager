@@ -3,7 +3,7 @@
   "id": "BladesongModManager",
   "name": "Bladesong Mod Manager",
   "author": "LTR-JT and contributors",
-  "version": "0.1.7",
+  "version": "0.1.9",
   "dependencies": {},
   "description": "Standalone UE4SS mod manager with reviewed dependency installation",
   "repository": "https://github.com/LTR-JT/BladesongModManager",
@@ -27,6 +27,10 @@
     "registry_url": {
       "type": "string",
       "default": "https://raw.githubusercontent.com/LTR-JT/BladesongModFramework/main/mod-index.json"
+    },
+    "auto_update_manager": {
+      "type": "boolean",
+      "default": true
     }
   },
   "license": "MIT",

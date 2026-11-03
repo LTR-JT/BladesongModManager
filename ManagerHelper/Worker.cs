@@ -87,7 +87,7 @@ partial class Worker {
  static void Fetch(string url,string path,long limit=67108864,int timeout=30000){
   Uri u=Https(url);ServicePointManager.SecurityProtocol=SecurityProtocolType.Tls12;
   for(int hop=0;hop<6;hop++){
-   var r=(HttpWebRequest)WebRequest.Create(u);r.AllowAutoRedirect=false;r.UserAgent="BladesongModManager/0.1.7";r.Timeout=timeout;r.ReadWriteTimeout=timeout;
+   var r=(HttpWebRequest)WebRequest.Create(u);r.AllowAutoRedirect=false;r.UserAgent="BladesongModManager/0.1.9";r.Timeout=timeout;r.ReadWriteTimeout=timeout;
    string rate=Path.Combine(Data,"rate-"+TextHash(u.Host)+".json");lock(NetworkSync){if(File.Exists(rate)){DateTime until;if(DateTime.TryParse(S(Read(rate),"until"),out until)&&until.ToUniversalTime()>DateTime.UtcNow)throw new Exception("Provider rate limit cooldown; using cached metadata where available");}}
    HttpWebResponse received;try{received=(HttpWebResponse)r.GetResponse();}catch(WebException e){var failed=e.Response as HttpWebResponse;if(failed!=null){using(failed){if((int)failed.StatusCode==429||((int)failed.StatusCode==403&&(failed.Headers["X-RateLimit-Remaining"]=="0"||failed.Headers["Retry-After"]!=null))){int seconds;long reset;DateTime until=DateTime.UtcNow.AddMinutes(15);if(Int32.TryParse(failed.Headers["Retry-After"],out seconds))until=DateTime.UtcNow.AddSeconds(Math.Min(86400,Math.Max(1,seconds)));else if(Int64.TryParse(failed.Headers["X-RateLimit-Reset"],out reset))until=new DateTime(1970,1,1,0,0,0,DateTimeKind.Utc).AddSeconds(reset);lock(NetworkSync)Write(rate,Obj("until",until.ToString("o")));throw new Exception("Provider rate limit reached; cached metadata remains available");}}}throw;}
    using(var response=received){
@@ -318,7 +318,12 @@ partial class Worker {
   var plan=Read(path);Need(Convert.ToInt32(G(plan,"schema_version"))==1&&Convert.ToBoolean(G(plan,"approved",false)),"Unapproved plan");string exe=GameExe();
   while(GameRunning(exe))Thread.Sleep(1000);
   string transaction=Child(Path.Combine(Data,"rollback"),S(plan,"id"));Directory.CreateDirectory(transaction);var changes=new List<object>();
-  using(var mutex=new Mutex(false,"Local\\BMFInstall_"+Hash(path).Substring(0,16))){Need(mutex.WaitOne(0),"Another transaction is active");try{
+  using(var mutex=new Mutex(false,"Local\\BMFInstall_"+TextHash(Path.GetFullPath(ModsRoot).ToLowerInvariant()).Substring(0,16))){Need(mutex.WaitOne(0),"Another transaction is active");try{
+   if(Convert.ToBoolean(G(plan,"startup_auto",false))){
+    Need(StartupUpdatesEnabled(),"Automatic manager updates disabled; staged update deferred");
+    Need(!UserChangesPending(),"Pending user changes take priority; startup update deferred");
+    object current=Read(Child(ModRoot,"bmf-installed.json"));Need(TextHash(Json.Serialize(current))==S(plan,"installed_snapshot"),"Installed manager changed; startup update deferred");
+   }
    // Prepare every backup before the first write, including installation records.
    foreach(var item in A(G(plan,"items"))){object m=Read(S(item,"manifest"));Manifest(m);Ownable(S(m,"id"));string install=Child(ModsRoot,S(m,"id"));string record=Path.Combine(install,"bmf-installed.json");object old=File.Exists(record)?Read(record):null;
     foreach(var f in A(G(m,"files"))){string source=Child(S(item,"payload"),S(f,"path")),dest=Target(m,S(f,"path"));Need(Hash(source)==S(f,"sha256").ToLowerInvariant(),"Staged file changed");string backup=null;
@@ -356,7 +361,7 @@ partial class Worker {
    Write(Path.Combine(transaction,"journal.json"),Obj("status","prepared","changes",changes));var done=new List<object>();
    try{foreach(var c in changes){Directory.CreateDirectory(Path.GetDirectoryName(S(c,"destination")));done.Add(c);Write(Path.Combine(transaction,"journal.json"),Obj("status","applying","changes",done));if(G(c,"move_directory")!=null)Directory.Move(S(c,"move_directory"),S(c,"destination"));else if(Convert.ToBoolean(G(c,"delete",false)))File.Delete(S(c,"destination"));else{File.Copy(S(c,"source"),S(c,"destination"),true);Need(Hash(S(c,"destination"))==S(c,"sha256"),"Installed hash mismatch");}}}
    catch{for(int i=done.Count-1;i>=0;i--){var c=done[i];if(G(c,"move_directory")!=null){if(Directory.Exists(S(c,"destination")))Directory.Move(S(c,"destination"),S(c,"move_directory"));}else if(G(c,"backup")!=null)File.Copy(S(c,"backup"),S(c,"destination"),true);else if(File.Exists(S(c,"destination")))File.Delete(S(c,"destination"));}Write(Path.Combine(transaction,"journal.json"),Obj("status","rolled_back","changes",done));throw;}
-   Write(Path.Combine(transaction,"journal.json"),Obj("status","committed","changes",changes));Write(Path.Combine(Data,"pending.json"),Obj("schema_version",1,"approved",false,"items",new object[0]));
+   Write(Path.Combine(transaction,"journal.json"),Obj("status","committed","changes",changes));if(!Convert.ToBoolean(G(plan,"startup_auto",false)))Write(Path.Combine(Data,"pending.json"),Obj("schema_version",1,"approved",false,"items",new object[0]));
   }finally{mutex.ReleaseMutex();}}
 
  }
@@ -385,6 +390,8 @@ partial class Worker {
  }
  static object Run(object request,string work){
   object args=G(request,"args",Obj());switch(S(request,"operation")){
+   case "startup-update":{object result=StartupUpdate(request,work);Write(Path.Combine(Data,"startup-update.json"),result);return result;}
+   case "startup-update-local":{string manifest=S(args,"manifest");return StartupUpdate(request,work,new Source{Manifest=Read(manifest),Archive=S(args,"archive"),Url="fixture"},false);}
    case "browse":return Browse(args,work);
    case "select-component-release-local":try{return Obj("status","complete","url",SelectComponentRelease(Read(S(args,"manifest")),Read(S(args,"releases"))));}catch(NoPublishedReleaseException){return Obj("status","complete","state","unpublished");}
    case "validate-dependencies-local":Dependencies(Read(S(args,"path")));return Obj("status","complete");
@@ -419,7 +426,7 @@ partial class Worker {
     object result;
     try{Apply(path);result=Obj("status","complete","message","Approved changes applied");}
     catch(Exception error){result=Obj("status","failed","error",error.Message);}
-    Write(Path.Combine(Data,"last-apply.json"),result);
+    if(!Convert.ToBoolean(G(plan,"startup_auto",false))||File.Exists(Child(ModRoot,"bmf-installed.json")))Write(Path.Combine(Data,Convert.ToBoolean(G(plan,"startup_auto",false))?"startup-apply-result.json":"last-apply.json"),result);
     if(Convert.ToBoolean(G(plan,"relaunch",false))){string exe=GameExe();if(File.Exists(exe)&&!GameRunning(exe))Process.Start(new ProcessStartInfo(exe){WorkingDirectory=Path.GetDirectoryName(exe)});}
     return result;
    }

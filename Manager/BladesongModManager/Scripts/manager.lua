@@ -248,23 +248,29 @@ function M.Render()
   end
  elseif M.page=='settings'then
 
-  line('Registered settings (saved per mod; changes are read by the owning mod).')
-
-  for _,mod in ipairs(F.GetRegisteredMods())do for key,definition in pairs(mod.settings or {})do
-
-   local settings=F.GetSettings(mod.id);local value=settings[key];if value==nil then value=definition.default end
-
-   if definition.type=='boolean'then action(mod.name..': '..key..' = '..tostring(value),function()F.SetSetting(mod.id,key,not value);M.Render()end)
-
-   else line(mod.name..': '..key..' = '..tostring(value)..' (edit JSON for non-boolean values in this preview)')end
-
-  end end
+  line('SETTINGS',nil,28)
+  for _,mod in ipairs(F.GetRegisteredMods())do
+   local keys={};for key,definition in pairs(mod.settings or {})do if definition.type=='boolean'then keys[#keys+1]=key end end;table.sort(keys)
+   if #keys>0 then
+    local body=card();line(mod.name or mod.id,body,30)
+    local settings=F.GetSettings(mod.id)
+    for _,key in ipairs(keys)do
+     local definition=mod.settings[key];local value=settings[key];if value==nil then value=definition.default end
+     local names={auto_check='Automatically check for updates',auto_update_manager='Automatically update Mod Manager',developer_mode='Developer mode'}
+     local caption=definition.label or names[key]or key:gsub('_',' '):gsub('^%l',string.upper)
+     local row=new(M.panel,'HorizontalBox');add(body,row)
+     local name_slot=row:AddChildToHorizontalBox(label(M.panel,caption,26));name_slot:SetSize({Value=1,SizeRule=1});name_slot:SetVerticalAlignment(2)
+     local toggle=button(M.panel,value and 'On'or 'Off',function()F.SetSetting(mod.id,key,not value);M.Render()end);toggle:SetMinDimensions(220,64)
+     local holder=new(M.panel,'SizeBox');holder:SetWidthOverride(220);holder:SetContent(toggle)
+     local slot=row:AddChildToHorizontalBox(holder);slot:SetVerticalAlignment(2);slot:SetPadding({Left=20,Top=0,Right=0,Bottom=0})
+    end
+   end
+  end
 
  else
 
   line('Mod Manager '..F.VERSION..' | Standalone UE4SS mod');line('Game: '..F.GetGameVersion()..' | Optional framework: '..F.GetFrameworkStatus())
 
-  line('Compatibility is capability-based; Main and Bleeding Edge are not both runtime tested.')
 
   action('Export diagnostic report',function()F.ExportDiagnostics(manager_root..'../Data/diagnostics.json');line('Diagnostic report exported without usernames, hardware IDs, or save contents.')end)
 

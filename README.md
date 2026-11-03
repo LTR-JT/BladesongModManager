@@ -31,3 +31,11 @@ With the legacy combined framework installed, its old Mods button is collapsed w
 The in-game manager preserves `Data`, `Scripts/preconstructions` (including its blade library and previews), and `Scripts/blades` in `BMF_UserData/<mod-id>` beside the game executable. Reinstall restores missing library files automatically. The original runtime folder is also retained in `BMF_Uninstalled`.
 
 For older uninstalls without a separate data copy, reinstall can restore the data from the latest matching uninstall archive. Keep those backup folders if they contain your only copy of a library.
+
+## Automatic updates during normal startup
+
+An independent UE4SS bootstrap checks for a new official Mod Manager release in the background before the manager menu initializes. It still runs if the menu module fails to initialize, and it does not use the framework or game UI objects.
+
+Verified updates are staged and applied after Bladesong exits normally. The game is never closed or restarted automatically. Your next launch uses the update. No Steam launch option or extra shortcut is required.
+
+Turn off **Automatically update Mod Manager** in Settings to disable this behavior. Pending user changes, local edits and deployments owned by another manager are preserved. UE4SS itself must still start; if a game update prevents UE4SS from loading at all, update UE4SS manually.

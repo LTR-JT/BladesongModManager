@@ -13,5 +13,5 @@ with tempfile.TemporaryDirectory(dir=ROOT/'Tests')as tmp:
  path=Path(tmp)/'syntax.lua';path.write_text('\n'.join('assert(loadfile('+json.dumps(str(f).replace('\\','/'))+'))'for f in (ROOT/'Manager').rglob('*.lua')),encoding='utf-8');run(lua,path)
 for name in ['manager_startup.lua','catalogue.lua','menu.lua','manager_open.lua','browse.lua']:run(lua,ROOT/'Tests'/name)
 run(sys.executable,ROOT/'Tools/build_worker.py')
-for name in ['install_test.py','dependency_test.py','installer_test.py']:run(sys.executable,ROOT/'Tests'/name)
+for name in ['install_test.py','dependency_test.py','installer_test.py','startup_test.py']:run(sys.executable,ROOT/'Tests'/name)
 print('All optional manager checks passed')
